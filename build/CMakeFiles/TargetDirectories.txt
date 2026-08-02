@@ -1,0 +1,4 @@
+/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/oncrypto_cli.dir
+/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/oncrypto_test.dir
+/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/edit_cache.dir
+/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,19 @@
+# ninja log v7
+8	8906	1785652672956730384	CMakeFiles/oncrypto_cli.dir/src/oncrypto.cpp.o	1205bb62e795c304
+40	8941	1785652672988730384	CMakeFiles/oncrypto_test.dir/src/oncrypto.cpp.o	b888cd14b71c6e3c
+19	9039	1785652672968730384	CMakeFiles/oncrypto_cli.dir/src/utils/KeyDerivation.cpp.o	906833083e9b1ada
+15	10026	1785652672960730384	CMakeFiles/oncrypto_cli.dir/src/cryption/algo/XChaCha20.cpp.o	70e45839eb4d006a
+14	10331	1785652672960730384	CMakeFiles/oncrypto_cli.dir/src/cryption/algo/ChaCha20.cpp.o	fc5eeec6904a062b
+9	10602	1785652672956730384	CMakeFiles/oncrypto_cli.dir/src/repo/CryptoRepository.cpp.o	64e15d644de70178
+10	10679	1785652672956730384	CMakeFiles/oncrypto_cli.dir/src/cryption/algo/AES256GCM.cpp.o	a1fcfcc37364eb49
+21	14035	1785652672968730384	CMakeFiles/oncrypto_cli.dir/src/utils/FileUtils.cpp.o	40b2a94e27b86b42
+10332	17263	1785652683280730384	CMakeFiles/oncrypto_test.dir/src/utils/KeyDerivation.cpp.o	7602dfed5e300ed2
+9039	18352	1785652681988730384	CMakeFiles/oncrypto_test.dir/src/cryption/algo/ChaCha20.cpp.o	2dbadd084ae470fd
+8914	18484	1785652681860730384	CMakeFiles/oncrypto_test.dir/src/repo/CryptoRepository.cpp.o	52ae27f61f727c99
+8942	18651	1785652681892730384	CMakeFiles/oncrypto_test.dir/src/cryption/algo/AES256GCM.cpp.o	cfeed3780642ba82
+10026	19574	1785652682972730384	CMakeFiles/oncrypto_test.dir/src/cryption/algo/XChaCha20.cpp.o	be3d64887daf1bc5
+10602	19581	1785652683548730384	CMakeFiles/oncrypto_test.dir/src/utils/FileUtils.cpp.o	d91bdf48263d5ebd
+3	20482	1785652672948730384	CMakeFiles/oncrypto_cli.dir/main.cpp.o	11571c7a99ab89f5
+20482	20724	1785652693428730385	oncrypto_cli	52101e58972aeb4e
+26	30811	1785652672972730384	CMakeFiles/oncrypto_test.dir/tests/test.cpp.o	9ad0815142f3fa9b
+30811	31029	1785652703756730386	oncrypto_test	a1f9d0c8946defae
