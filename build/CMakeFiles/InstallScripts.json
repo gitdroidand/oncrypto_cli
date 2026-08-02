@@ -1,7 +1,7 @@
 {
 	"InstallScripts" : 
 	[
-		"/data/data/com.termux/files/home/OnCrypto/build/cmake_install.cmake"
+		"/sdcard/CPro/OnCrypto/build/cmake_install.cmake"
 	],
 	"Parallel" : false
 }

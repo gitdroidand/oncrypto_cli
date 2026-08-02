@@ -1,175 +1,106 @@
 cmake_minimum_required(VERSION 3.16)
-project(OnCrypto VERSION 1.3.0 LANGUAGES CXX)
+project(OnCrypto VERSION 1.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ============================================================
-# فلگ‌های ساخت
-# ============================================================
-option(BUILD_SHARED_LIB "Build shared library (liboncrypto.so)" ON)
-option(BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_TESTS "Build unit tests" ON)
+option(BUILD_EXAMPLES "Build example programs" ON)
 
 find_package(OpenSSL 3 REQUIRED COMPONENTS Crypto)
 
 # ============================================================
-# کتابخانه مشترک (اختیاری)
+# Core as OBJECT library (برای لینک استاتیک بعدی)
 # ============================================================
-if(BUILD_SHARED_LIB)
-    add_library(oncrypto SHARED
-        src/oncrypto.cpp
-        src/repo/CryptoRepository.cpp
-        src/cryption/algo/AES256GCM.cpp
-        src/cryption/algo/ChaCha20.cpp
-        src/cryption/algo/XChaCha20.cpp
-        src/utils/KeyDerivation.cpp
-        src/utils/FileUtils.cpp
-    )
 
-    target_include_directories(oncrypto 
-        PUBLIC 
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-            $<INSTALL_INTERFACE:include>
-        PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
+add_library(oncrypto_core OBJECT
+    core/src/oncrypto.cpp
+    core/src/Builder.cpp
+    core/src/Advanced.cpp
+    core/src/repo/CryptoRepository.cpp
+    core/src/cryption/algo/AES256GCM.cpp
+    core/src/cryption/algo/ChaCha20.cpp
+    core/src/cryption/algo/XChaCha20.cpp
+    core/src/utils/KeyDerivation.cpp
+    core/src/utils/FileUtils.cpp
+    core/src/format/OnCFormat.cpp
+    core/src/backend/OpenSSLBackend.cpp
+    core/src/streaming/Streaming.cpp
+)
 
-    target_link_libraries(oncrypto 
-        PUBLIC 
-            OpenSSL::Crypto
-    )
-
-    set_target_properties(oncrypto PROPERTIES
-        CXX_STANDARD 20
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF
-        POSITION_INDEPENDENT_CODE ON
-        VERSION ${PROJECT_VERSION}
-        SOVERSION 1
-    )
-endif()
+target_include_directories(oncrypto_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/core/include)
+target_link_libraries(oncrypto_core PUBLIC OpenSSL::Crypto)
 
 # ============================================================
-# برنامه CLI (همیشه ساخته میشه)
+# CLI Application
 # ============================================================
-add_executable(oncrypto_cli main.cpp)
-target_include_directories(oncrypto_cli PRIVATE include)
 
-if(BUILD_SHARED_LIB)
-    target_link_libraries(oncrypto_cli PRIVATE oncrypto)
-else()
-    # اگر کتابخانه غیرفعال باشه، از فایل‌های مستقیم استفاده کن
-    target_sources(oncrypto_cli PRIVATE
-        src/oncrypto.cpp
-        src/repo/CryptoRepository.cpp
-        src/cryption/algo/AES256GCM.cpp
-        src/cryption/algo/ChaCha20.cpp
-        src/cryption/algo/XChaCha20.cpp
-        src/utils/KeyDerivation.cpp
-        src/utils/FileUtils.cpp
-    )
-    target_link_libraries(oncrypto_cli PRIVATE OpenSSL::Crypto)
-endif()
+add_executable(oncrypto_cli cli/src/main.cpp)
+target_include_directories(oncrypto_cli PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core/include)
+target_link_libraries(oncrypto_cli PRIVATE oncrypto_core)
 
 # ============================================================
-# تست‌ها (اختیاری)
+# Tests
 # ============================================================
+
 if(BUILD_TESTS)
     add_executable(oncrypto_test tests/test.cpp)
-    target_include_directories(oncrypto_test PRIVATE 
-        include
-        tests/include
+    target_include_directories(oncrypto_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/core/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/include
     )
-    if(BUILD_SHARED_LIB)
-        target_link_libraries(oncrypto_test PRIVATE oncrypto)
-    else()
-        target_sources(oncrypto_test PRIVATE
-            src/oncrypto.cpp
-            src/repo/CryptoRepository.cpp
-            src/cryption/algo/AES256GCM.cpp
-            src/cryption/algo/ChaCha20.cpp
-            src/cryption/algo/XChaCha20.cpp
-            src/utils/KeyDerivation.cpp
-            src/utils/FileUtils.cpp
-        )
-        target_link_libraries(oncrypto_test PRIVATE OpenSSL::Crypto)
-    endif()
+    target_link_libraries(oncrypto_test PRIVATE oncrypto_core)
+    
+    add_executable(oncrypto_cli_test tests/test_cli.cpp)
+    target_include_directories(oncrypto_cli_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests/include)
 endif()
 
 # ============================================================
-# مثال‌ها (اختیاری)
+# Examples
 # ============================================================
-if(BUILD_EXAMPLES AND BUILD_SHARED_LIB)
+
+if(BUILD_EXAMPLES)
     add_executable(example_simple examples/example.cpp)
-    target_include_directories(example_simple PRIVATE include)
-    target_link_libraries(example_simple PRIVATE oncrypto)
+    target_include_directories(example_simple PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/core/include)
+    target_link_libraries(example_simple PRIVATE oncrypto_core)
 endif()
 
 # ============================================================
-# نصب (فقط وقتی کتابخانه ساخته بشه)
+# Compiler flags
 # ============================================================
-if(BUILD_SHARED_LIB)
-    include(GNUInstallDirs)
-    
-    install(TARGETS oncrypto
-        EXPORT oncryptoTargets
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
-    
-    install(DIRECTORY include/oncrypto
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING PATTERN "*.hpp"
-    )
-    
-    install(EXPORT oncryptoTargets
-        FILE oncryptoConfig.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/oncrypto
-    )
-endif()
 
-# ============================================================
-# کامپایلر flags
-# ============================================================
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(oncrypto_cli PRIVATE -g -O0 -Wall -Wextra -pedantic)
-    if(BUILD_SHARED_LIB)
-        target_compile_options(oncrypto PRIVATE -g -O0 -Wall -Wextra -pedantic)
-    endif()
-else()
-    target_compile_options(oncrypto_cli PRIVATE -O3 -DNDEBUG)
-    if(BUILD_SHARED_LIB)
-        target_compile_options(oncrypto PRIVATE -O3 -DNDEBUG)
-    endif()
-endif()
+target_compile_options(oncrypto_core PRIVATE 
+    $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG>
+)
+
+target_compile_options(oncrypto_cli PRIVATE 
+    $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG>
+)
 
 if(BUILD_TESTS)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(oncrypto_test PRIVATE -g -O0 -Wall -Wextra -pedantic)
-    else()
-        target_compile_options(oncrypto_test PRIVATE -O3 -DNDEBUG)
-    endif()
+    target_compile_options(oncrypto_test PRIVATE 
+        $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+    )
+    target_compile_options(oncrypto_cli_test PRIVATE 
+        $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+    )
 endif()
 
-if(BUILD_EXAMPLES AND BUILD_SHARED_LIB)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(example_simple PRIVATE -g -O0 -Wall -Wextra -pedantic)
-    else()
-        target_compile_options(example_simple PRIVATE -O3 -DNDEBUG)
-    endif()
+if(BUILD_EXAMPLES)
+    target_compile_options(example_simple PRIVATE 
+        $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
+        $<$<CONFIG:Release>:-O3 -DNDEBUG>
+    )
 endif()
 
-# ============================================================
-# چاپ خلاصه
-# ============================================================
 message(STATUS "")
 message(STATUS "OnCrypto ${PROJECT_VERSION} Configuration:")
-message(STATUS "  Build type:       ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Build shared lib: ${BUILD_SHARED_LIB}")
-message(STATUS "  Build tests:      ${BUILD_TESTS}")
-message(STATUS "  Build examples:   ${BUILD_EXAMPLES}")
+message(STATUS "  Build type:     ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Tests:          ${BUILD_TESTS}")
+message(STATUS "  Examples:       ${BUILD_EXAMPLES}")
 message(STATUS "")

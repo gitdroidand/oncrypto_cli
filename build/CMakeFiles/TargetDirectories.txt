@@ -1,4 +1,7 @@
-/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/oncrypto_cli.dir
-/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/oncrypto_test.dir
-/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/edit_cache.dir
-/data/data/com.termux/files/home/OnCrypto/build/CMakeFiles/rebuild_cache.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/oncrypto_core.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/oncrypto_cli.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/oncrypto_test.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/oncrypto_cli_test.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/example_simple.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/edit_cache.dir
+/sdcard/CPro/OnCrypto/build/CMakeFiles/rebuild_cache.dir
