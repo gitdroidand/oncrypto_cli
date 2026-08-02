@@ -3,3 +3,8 @@ build_x64/
 *.so
 *.a
 *.o
+build/
+build_x64/
+*.so
+*.a
+*.o
