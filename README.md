@@ -171,8 +171,8 @@ Supported compilers:
 ## Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/OnCrypto.git
-cd OnCrypto
+git clone https://github.com/gitdroidand/oncrypto_cli.git
+cd oncrypto_cli
 
 ---
 
