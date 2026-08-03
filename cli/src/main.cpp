@@ -44,7 +44,7 @@ void printBanner() {
  \___/|_| |_|\____|_|   \__, | .__/ \__\___/
                         |___/|_|
 )" << Color::RESET;
-    std::cout << Color::BOLD << "OnCrypto v1.3.1" << Color::RESET;
+    std::cout << Color::BOLD << "OnCrypto v1.5.0" << Color::RESET;
     std::cout << Color::DIM << " - Smart Encryption Tool" << Color::RESET << "\n";
     std::cout << Color::DIM << "=====================================\n\n" << Color::RESET;
 }
