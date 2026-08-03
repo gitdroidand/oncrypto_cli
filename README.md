@@ -151,7 +151,7 @@ oncrypto/
 
 ```bash
 # Clone the repository
-git clone [https://github.com/your-org/oncrypto.git](https://github.com/your-org/oncrypto.git)
+git clone [https://github.com/gitdroidand/oncrypto_cli.git](https://github.com/gitdroidand/oncrypto_cli.git)
 cd oncrypto
 
 # Create build directory
