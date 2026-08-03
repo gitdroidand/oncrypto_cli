@@ -1,8 +1,6 @@
 #include "algo/AES256GCM.hpp"
-#include <openssl/evp.h>
-#include <openssl/rand.h>
+#include "oncrypto/backend/Backend.hpp"
 #include <stdexcept>
-#include <cstring>
 
 namespace crypto {
 
@@ -14,50 +12,15 @@ std::vector<unsigned char> AES256GCM::encrypt(
         throw std::runtime_error("AES-256 requires 32-byte key");
     }
 
-    std::vector<unsigned char> iv(12);
-    if (RAND_bytes(iv.data(), iv.size()) != 1) {
-        throw std::runtime_error("Failed to generate IV");
-    }
+    auto iv = onc::core::backend::randomBytes(12);
+    auto result = onc::core::backend::encrypt(data, key, iv, "AES-256-GCM");
 
-    std::vector<unsigned char> tag(16);
-    std::vector<unsigned char> ciphertext(data.size());
-    int outlen = 0, tmplen = 0;
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("Failed to create EVP context");
-
-    try {
-        if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
-            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), nullptr) != 1 ||
-            EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) != 1) {
-            throw std::runtime_error("Failed to initialize encryption");
-        }
-
-        if (EVP_EncryptUpdate(ctx, ciphertext.data(), &outlen, data.data(), data.size()) != 1) {
-            throw std::runtime_error("Encryption update failed");
-        }
-
-        if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + outlen, &tmplen) != 1) {
-            throw std::runtime_error("Encryption finalization failed");
-        }
-        outlen += tmplen;
-
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag.size(), tag.data()) != 1) {
-            throw std::runtime_error("Failed to get GCM tag");
-        }
-
-        std::vector<unsigned char> result;
-        result.reserve(iv.size() + tag.size() + outlen);
-        result.insert(result.end(), iv.begin(), iv.end());
-        result.insert(result.end(), tag.begin(), tag.end());
-        result.insert(result.end(), ciphertext.begin(), ciphertext.begin() + outlen);
-
-        EVP_CIPHER_CTX_free(ctx);
-        return result;
-    } catch (...) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw;
-    }
+    std::vector<unsigned char> output;
+    output.reserve(iv.size() + result.tag.size() + result.ciphertext.size());
+    output.insert(output.end(), iv.begin(), iv.end());
+    output.insert(output.end(), result.tag.begin(), result.tag.end());
+    output.insert(output.end(), result.ciphertext.begin(), result.ciphertext.end());
+    return output;
 }
 
 std::vector<unsigned char> AES256GCM::decrypt(
@@ -75,39 +38,7 @@ std::vector<unsigned char> AES256GCM::decrypt(
     std::vector<unsigned char> tag(data.begin() + 12, data.begin() + 28);
     std::vector<unsigned char> ciphertext(data.begin() + 28, data.end());
 
-    std::vector<unsigned char> plaintext(ciphertext.size());
-    int outlen = 0, tmplen = 0;
-
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("Failed to create EVP context");
-
-    try {
-        if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1 ||
-            EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), nullptr) != 1 ||
-            EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) != 1) {
-            throw std::runtime_error("Failed to initialize decryption");
-        }
-
-        if (EVP_DecryptUpdate(ctx, plaintext.data(), &outlen, ciphertext.data(), ciphertext.size()) != 1) {
-            throw std::runtime_error("Decryption update failed");
-        }
-
-        if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, tag.size(), tag.data()) != 1) {
-            throw std::runtime_error("Failed to set GCM tag");
-        }
-
-        if (EVP_DecryptFinal_ex(ctx, plaintext.data() + outlen, &tmplen) <= 0) {
-            throw std::runtime_error("Decryption failed - incorrect key or corrupted data");
-        }
-        outlen += tmplen;
-
-        plaintext.resize(outlen);
-        EVP_CIPHER_CTX_free(ctx);
-        return plaintext;
-    } catch (...) {
-        EVP_CIPHER_CTX_free(ctx);
-        throw;
-    }
+    return onc::core::backend::decrypt(ciphertext, key, iv, tag, "AES-256-GCM");
 }
 
 AlgorithmInfo AES256GCM::getInfo() const {

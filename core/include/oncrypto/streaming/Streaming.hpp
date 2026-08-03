@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <functional>
 
+#include "oncrypto/Export.hpp"
+
 namespace onc::streaming {
 
 // ============================================================

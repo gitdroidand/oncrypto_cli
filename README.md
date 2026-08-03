@@ -87,4 +87,8 @@ The library features a decoupled, backend-agnostic design with high-security aut
 
 ---
 
+## 📝 Documentation
+
+For detailed SDK and architecture information, see `docs/architecture.md`, `docs/api.md`, `docs/format.md`, `docs/security.md`, and `docs/building.md`.
+
 ## 🤖 Automatic Algorithm Selection

@@ -11,6 +11,9 @@
 #include <string>
 #include <optional>
 
+#include "oncrypto/Export.hpp"
+#include "oncrypto/streaming/Streaming.hpp"
+
 namespace crypto {
 
 // ============================================================
@@ -23,7 +26,7 @@ namespace crypto {
  * @param password User password
  * @return Encrypted data (includes salt + IV + tag + ciphertext)
  */
-std::vector<unsigned char> encrypt(
+ONCRYPTO_API std::vector<unsigned char> encrypt(
     const std::vector<unsigned char>& data,
     const std::string& password
 );
@@ -34,7 +37,7 @@ std::vector<unsigned char> encrypt(
  * @param password User password
  * @return Original decrypted data
  */
-std::vector<unsigned char> decrypt(
+ONCRYPTO_API std::vector<unsigned char> decrypt(
     const std::vector<unsigned char>& data,
     const std::string& password
 );
@@ -42,12 +45,12 @@ std::vector<unsigned char> decrypt(
 /**
  * Get the algorithm name used
  */
-std::string getAlgorithmName();
+ONCRYPTO_API std::string getAlgorithmName();
 
 /**
  * Get library version
  */
-std::string getVersion();
+ONCRYPTO_API std::string getVersion();
 
 // ============================================================
 // ✅ NEW: Layer 1 - Simple File API
@@ -60,7 +63,7 @@ std::string getVersion();
  * @param password User password
  * @return true on success, false on failure
  */
-bool encryptFile(
+ONCRYPTO_API bool encryptFile(
     const std::string& inputFile,
     const std::string& outputFile,
     const std::string& password
@@ -73,7 +76,7 @@ bool encryptFile(
  * @param password User password
  * @return true on success, false on failure
  */
-bool decryptFile(
+ONCRYPTO_API bool decryptFile(
     const std::string& inputFile,
     const std::string& outputFile,
     const std::string& password
@@ -94,7 +97,7 @@ enum class Algorithm {
     XChaCha20
 };
 
-class Encryptor {
+class ONCRYPTO_API Encryptor {
 public:
     Encryptor& password(const std::string& pwd);
     Encryptor& algorithm(Algorithm algo);
@@ -109,7 +112,7 @@ private:
     int iterations_ = 100000;
 };
 
-class Decryptor {
+class ONCRYPTO_API Decryptor {
 public:
     Decryptor& password(const std::string& pwd);
     Decryptor& algorithm(Algorithm algo);
@@ -157,7 +160,7 @@ struct DecryptionOptions {
 /**
  * Advanced encrypt with full options
  */
-std::vector<unsigned char> encrypt(
+ONCRYPTO_API std::vector<unsigned char> encrypt(
     const std::vector<unsigned char>& data,
     const std::string& password,
     const EncryptionOptions& options
@@ -166,7 +169,7 @@ std::vector<unsigned char> encrypt(
 /**
  * Advanced decrypt with full options
  */
-std::vector<unsigned char> decrypt(
+ONCRYPTO_API std::vector<unsigned char> decrypt(
     const std::vector<unsigned char>& data,
     const std::string& password,
     const DecryptionOptions& options
@@ -179,8 +182,6 @@ std::vector<unsigned char> decrypt(
 // Streaming API (v1.5.0)
 // ============================================================
 
-#include "oncrypto/streaming/Streaming.hpp"
-
 namespace onc {
 
 /**
@@ -192,7 +193,7 @@ namespace onc {
  * @param callback Progress callback (optional)
  * @return true on success
  */
-bool encryptStream(
+ONCRYPTO_API bool encryptStream(
     const std::string& inputFile,
     const std::string& outputFile,
     const std::string& password,
@@ -209,7 +210,7 @@ bool encryptStream(
  * @param callback Progress callback (optional)
  * @return true on success
  */
-bool decryptStream(
+ONCRYPTO_API bool decryptStream(
     const std::string& inputFile,
     const std::string& outputFile,
     const std::string& password,

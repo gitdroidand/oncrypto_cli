@@ -8,11 +8,173 @@
 
 namespace onc::core::backend {
 
+#include <vector>
+
+// Forward declarations for internal impl_ functions so C ABI wrappers can call them.
+std::vector<unsigned char> onc_core_backend_impl_randomBytes(size_t size);
+std::vector<unsigned char> onc_core_backend_impl_deriveKey(
+    const std::string& password,
+    const std::vector<unsigned char>& salt,
+    size_t keySize,
+    size_t iterations
+);
+static std::vector<unsigned char> onc_core_backend_impl_xchacha20ToChacha20Nonce(
+    const std::vector<unsigned char>& xnonce,
+    const std::vector<unsigned char>& key
+);
+static const EVP_CIPHER* onc_core_backend_impl_getCipher(const std::string& algorithm);
+EncryptResult onc_core_backend_impl_encrypt(
+    const std::vector<unsigned char>& plaintext,
+    const std::vector<unsigned char>& key,
+    const std::vector<unsigned char>& nonce,
+    const std::string& algorithm
+);
+std::vector<unsigned char> onc_core_backend_impl_decrypt(
+    const std::vector<unsigned char>& ciphertext,
+    const std::vector<unsigned char>& key,
+    const std::vector<unsigned char>& nonce,
+    const std::vector<unsigned char>& tag,
+    const std::string& algorithm
+);
+
+// Export C-ABI symbols for engine. These call the internal impl_ functions above.
+#include "oncrypto_engine.h"
+
+extern "C" {
+
+ONCRYPTO_ENGINE_API unsigned int oncrypto_engine_version_major(void) {
+    return ONCRYPTO_ENGINE_VERSION_MAJOR;
+}
+
+ONCRYPTO_ENGINE_API unsigned int oncrypto_engine_version_minor(void) {
+    return ONCRYPTO_ENGINE_VERSION_MINOR;
+}
+
+ONCRYPTO_ENGINE_API const char* oncrypto_engine_version_string(void) {
+    return "1.0.0";
+}
+
+ONCRYPTO_ENGINE_API int oncrypto_engine_random_bytes(unsigned char* out, size_t out_len) {
+    try {
+        auto v = onc_core_backend_impl_randomBytes(out_len);
+        std::memcpy(out, v.data(), out_len);
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+ONCRYPTO_ENGINE_API int oncrypto_engine_pbkdf2_hmac_sha256(
+    const char* password,
+    const unsigned char* salt,
+    size_t salt_len,
+    unsigned int iterations,
+    unsigned char* out,
+    size_t out_len
+) {
+    try {
+        std::string pw(password ? password : "");
+        std::vector<unsigned char> s(salt, salt + salt_len);
+        auto key = onc_core_backend_impl_deriveKey(pw, s, out_len, iterations);
+        std::memcpy(out, key.data(), out_len);
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+ONCRYPTO_ENGINE_API int oncrypto_engine_aead_encrypt(
+    const char* algorithm,
+    const unsigned char* key,
+    size_t key_len,
+    const unsigned char* nonce,
+    size_t nonce_len,
+    const unsigned char* plaintext,
+    size_t plaintext_len,
+    unsigned char* ciphertext,
+    size_t* ciphertext_len,
+    unsigned char* tag,
+    size_t* tag_len
+) {
+    try {
+        std::vector<unsigned char> kp(key, key + key_len);
+        std::vector<unsigned char> nn(nonce, nonce + nonce_len);
+        std::vector<unsigned char> pt(plaintext, plaintext + plaintext_len);
+        auto res = onc_core_backend_impl_encrypt(pt, kp, nn, std::string(algorithm));
+        if (*ciphertext_len < res.ciphertext.size()) return 2;
+        if (*tag_len < res.tag.size()) return 3;
+        std::memcpy(ciphertext, res.ciphertext.data(), res.ciphertext.size());
+        std::memcpy(tag, res.tag.data(), res.tag.size());
+        *ciphertext_len = res.ciphertext.size();
+        *tag_len = res.tag.size();
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+ONCRYPTO_ENGINE_API int oncrypto_engine_aead_decrypt(
+    const char* algorithm,
+    const unsigned char* key,
+    size_t key_len,
+    const unsigned char* nonce,
+    size_t nonce_len,
+    const unsigned char* ciphertext,
+    size_t ciphertext_len,
+    const unsigned char* tag,
+    size_t tag_len,
+    unsigned char* plaintext,
+    size_t* plaintext_len
+) {
+    try {
+        std::vector<unsigned char> kp(key, key + key_len);
+        std::vector<unsigned char> nn(nonce, nonce + nonce_len);
+        std::vector<unsigned char> ct(ciphertext, ciphertext + ciphertext_len);
+        std::vector<unsigned char> tg(tag, tag + tag_len);
+        auto res = onc_core_backend_impl_decrypt(ct, kp, nn, tg, std::string(algorithm));
+        if (*plaintext_len < res.size()) return 2;
+        std::memcpy(plaintext, res.data(), res.size());
+        *plaintext_len = res.size();
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+ONCRYPTO_ENGINE_API int oncrypto_engine_hmac_sha256(
+    const unsigned char* key,
+    size_t key_len,
+    const unsigned char* data,
+    size_t data_len,
+    unsigned char* out,
+    size_t* out_len
+) {
+    try {
+        EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+        if (!mac) return 2;
+        EVP_MAC_CTX* ctx = EVP_MAC_CTX_new(mac);
+        if (!ctx) { EVP_MAC_free(mac); return 2; }
+        OSSL_PARAM params[] = { OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST, (char*)"SHA256", 0), OSSL_PARAM_construct_end() };
+        if (EVP_MAC_init(ctx, key, key_len, params) != 1) { EVP_MAC_CTX_free(ctx); EVP_MAC_free(mac); return 2; }
+        if (EVP_MAC_update(ctx, data, data_len) != 1) { EVP_MAC_CTX_free(ctx); EVP_MAC_free(mac); return 2; }
+        size_t olen = *out_len;
+        if (EVP_MAC_final(ctx, out, &olen, *out_len) != 1) { EVP_MAC_CTX_free(ctx); EVP_MAC_free(mac); return 2; }
+        *out_len = olen;
+        EVP_MAC_CTX_free(ctx);
+        EVP_MAC_free(mac);
+        return 0;
+    } catch (...) {
+        return 1;
+    }
+}
+
+} // extern "C"
 // ============================================================
 // Random
 // ============================================================
 
-std::vector<unsigned char> randomBytes(size_t size) {
+// Internal implementation used by engine C-ABI wrapper.
+std::vector<unsigned char> onc_core_backend_impl_randomBytes(size_t size) {
     std::vector<unsigned char> bytes(size);
     if (RAND_bytes(bytes.data(), size) != 1) {
         throw std::runtime_error("Backend: Failed to generate random bytes");
@@ -24,7 +186,7 @@ std::vector<unsigned char> randomBytes(size_t size) {
 // Key Derivation (PBKDF2)
 // ============================================================
 
-std::vector<unsigned char> deriveKey(
+std::vector<unsigned char> onc_core_backend_impl_deriveKey(
     const std::string& password,
     const std::vector<unsigned char>& salt,
     size_t keySize,
@@ -52,7 +214,7 @@ std::vector<unsigned char> deriveKey(
 // XChaCha20: Convert 24-byte nonce to 12-byte nonce using EVP_MAC
 // ============================================================
 
-static std::vector<unsigned char> xchacha20ToChacha20Nonce(
+static std::vector<unsigned char> onc_core_backend_impl_xchacha20ToChacha20Nonce(
     const std::vector<unsigned char>& xnonce,
     const std::vector<unsigned char>& key
 ) {
@@ -106,7 +268,7 @@ static std::vector<unsigned char> xchacha20ToChacha20Nonce(
 // Get Cipher
 // ============================================================
 
-static const EVP_CIPHER* getCipher(const std::string& algorithm) {
+static const EVP_CIPHER* onc_core_backend_impl_getCipher(const std::string& algorithm) {
     if (algorithm == "AES-256-GCM") {
         return EVP_aes_256_gcm();
     }
@@ -120,13 +282,13 @@ static const EVP_CIPHER* getCipher(const std::string& algorithm) {
 // Encrypt
 // ============================================================
 
-EncryptResult encrypt(
+EncryptResult onc_core_backend_impl_encrypt(
     const std::vector<unsigned char>& plaintext,
     const std::vector<unsigned char>& key,
     const std::vector<unsigned char>& nonce,
     const std::string& algorithm
 ) {
-    const EVP_CIPHER* cipher = getCipher(algorithm);
+    const EVP_CIPHER* cipher = onc_core_backend_impl_getCipher(algorithm);
     size_t keySize = EVP_CIPHER_key_length(cipher);
     size_t tagSize = 16;
     
@@ -139,7 +301,7 @@ EncryptResult encrypt(
         if (nonce.size() != 24) {
             throw std::runtime_error("Backend: XChaCha20 requires 24-byte nonce");
         }
-        actualNonce = xchacha20ToChacha20Nonce(nonce, key);
+        actualNonce = onc_core_backend_impl_xchacha20ToChacha20Nonce(nonce, key);
     } else {
         if (nonce.size() != 12 && nonce.size() != 24) {
             throw std::runtime_error("Backend: Invalid nonce size");
@@ -194,14 +356,14 @@ EncryptResult encrypt(
 // Decrypt
 // ============================================================
 
-std::vector<unsigned char> decrypt(
+std::vector<unsigned char> onc_core_backend_impl_decrypt(
     const std::vector<unsigned char>& ciphertext,
     const std::vector<unsigned char>& key,
     const std::vector<unsigned char>& nonce,
     const std::vector<unsigned char>& tag,
     const std::string& algorithm
 ) {
-    const EVP_CIPHER* cipher = getCipher(algorithm);
+    const EVP_CIPHER* cipher = onc_core_backend_impl_getCipher(algorithm);
     size_t keySize = EVP_CIPHER_key_length(cipher);
     
     if (key.size() != keySize) {
@@ -213,7 +375,7 @@ std::vector<unsigned char> decrypt(
         if (nonce.size() != 24) {
             throw std::runtime_error("Backend: XChaCha20 requires 24-byte nonce");
         }
-        actualNonce = xchacha20ToChacha20Nonce(nonce, key);
+        actualNonce = onc_core_backend_impl_xchacha20ToChacha20Nonce(nonce, key);
     } else {
         if (nonce.size() != 12 && nonce.size() != 24) {
             throw std::runtime_error("Backend: Invalid nonce size");

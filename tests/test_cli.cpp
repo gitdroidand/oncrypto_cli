@@ -1,8 +1,11 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include <string>
+#include <optional>
 
-// فقط توابع parseArguments و Arguments رو از main.cpp می‌گیریم
-// با تعریف مجدد ساده
+// ============================================================
+// Simple CLI Parser for testing (copied from main.cpp)
+// ============================================================
 
 struct Arguments {
     bool encrypt = false;
@@ -17,7 +20,6 @@ struct Arguments {
     bool quiet = false;
 };
 
-// کپی ساده از parseArguments از main.cpp
 bool parseArguments(int argc, char* argv[], Arguments& args) {
     if (argc < 2) {
         args.interactive = true;
@@ -67,6 +69,10 @@ bool parseArguments(int argc, char* argv[], Arguments& args) {
 
     return true;
 }
+
+// ============================================================
+// Tests
+// ============================================================
 
 TEST_CASE("CLI: Parse -text and -key") {
     const char* argv[] = {"oncrypto", "-text", "Hello", "-key", "pass"};
