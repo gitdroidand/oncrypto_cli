@@ -11,7 +11,10 @@ option(BUILD_CLI "Build the oncrypto command line application" ON)
 option(BUILD_TESTS "Build unit tests" ON)
 option(BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_STATIC_SDK "Build public static SDK library (liboncrypto.a)" ON)
-option(ENABLE_VISIBILITY "Hide internal symbols in shared library" ON)
+
+# Disable symbol hiding by default so that exported C++ symbols (e.g. CryptoRepository)
+# are visible to executable targets like oncrypto_cli when linking against the shared library.
+option(ENABLE_VISIBILITY "Hide internal symbols in shared library" OFF)
 
 find_package(OpenSSL 3 REQUIRED COMPONENTS Crypto)
 
@@ -63,6 +66,7 @@ target_compile_definitions(oncrypto_core_objs PRIVATE ONCRYPTO_BUILD)
 
 target_compile_definitions(oncrypto_engine_objs PRIVATE ONCRYPTO_BUILD ONCRYPTO_ENGINE_BUILD)
 
+# Conditional visibility flags based on ENABLE_VISIBILITY option
 target_compile_options(oncrypto_core_objs PRIVATE
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra -pedantic>
     $<$<CONFIG:Release>:-O3 -DNDEBUG>
@@ -111,13 +115,13 @@ target_link_libraries(oncrypto
 
 target_compile_definitions(oncrypto PRIVATE ONCRYPTO_BUILD)
 
+# Removed explicit 'CXX_VISIBILITY_PRESET hidden' and 'VISIBILITY_INLINES_HIDDEN ON' 
+# to allow symbols to remain visible by default when building the shared library.
 set_target_properties(oncrypto PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
     OUTPUT_NAME oncrypto
     CLEAN_DIRECT_OUTPUT 1
-    CXX_VISIBILITY_PRESET hidden
-    VISIBILITY_INLINES_HIDDEN ON
 )
 
 if(BUILD_STATIC_SDK)

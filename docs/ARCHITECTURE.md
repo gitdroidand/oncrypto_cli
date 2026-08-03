@@ -1,43 +1,46 @@
 # OnCrypto Architecture
 
-OnCrypto is designed as a clean SDK boundary between applications and secure cryptographic implementations.
+OnCrypto is designed as a cryptographic SDK with a clear separation between the public API, core processing, and backend implementations.
 
-## Core Layers
+## Architecture overview
 
-```
+```text
 Application / CLI
-    ↓
-liboncrypto.so / liboncrypto.a
-    ↓
-OnCrypto Core
-    ↓
+    |
+OnCrypto Public API
+    |
+Core
+    |
 Engine C ABI
-    ↓
-Backend implementation
+    |
+Backend Provider
+    |
+OpenSSL implementation
 ```
 
-- **Application / CLI**: Uses the OnCrypto public API through headers and library import.
-- **Public SDK**: `liboncrypto.so` and `liboncrypto.a` expose only OnCrypto symbols.
-- **OnCrypto Core**: Orchestrates format handling, algorithm selection, key derivation, and AEAD operations.
-- **Engine C ABI**: A stable C entrypoint that decouples the core from any backend provider.
-- **Backend implementation**: Internal provider that supplies random bytes, PBKDF2, AEAD, and HMAC.
+- **Application / CLI**: Consumes the OnCrypto public API.
+- **OnCrypto Public API**: Exposes library interfaces, data structures, and high-level operations.
+- **Core**: Handles OnC format, algorithm selection, key derivation, encryption, and decryption workflows.
+- **Engine C ABI**: Provides a stable internal boundary between core logic and backend implementations.
+- **Backend Provider**: Implements low-level cryptographic primitives used by the core.
+- **OpenSSL implementation**: One backend provider currently used by the SDK, treated as an internal detail.
 
-## Why this design
+## Design goals
 
-- The engine C ABI keeps the public SDK stable while allowing backend replacement.
-- The core does not expose backend implementation details to applications.
-- Shared library visibility is restricted so only intended public symbols are exported.
+- Keep the public SDK stable and backend-agnostic.
+- Hide implementation details behind the public API.
+- Allow backend replacement without changing the core or public interface.
+- Restrict symbol visibility so only intended API symbols are exported.
 
 ## Components
 
 ### `CryptoRepository`
 
-- Coordinates algorithm selection and encryption/decryption workflows.
+- Coordinates encryption and decryption workflows.
 - Produces and consumes the OnC binary format.
+- Selects the appropriate algorithm and manages metadata.
 
-### Algorithms
-
-Supported algorithms implement authenticated encryption with integrity protection:
+### Supported algorithms
 
 - `AES-256-GCM`
 - `ChaCha20-Poly1305`
@@ -45,6 +48,6 @@ Supported algorithms implement authenticated encryption with integrity protectio
 
 ### Backend abstraction
 
-- The backend exposes low-level primitives through a minimal C ABI.
-- This separation prevents the core from depending directly on a specific crypto library.
-- The internal backend provider is an implementation detail and is hidden from SDK users.
+- The core interacts with backend primitives through a minimal C ABI.
+- This separation prevents the core from depending on a specific library.
+- The internal backend provider is not exposed to SDK consumers.
