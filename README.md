@@ -1,372 +1,314 @@
-🔐 OnCrypto
+# 🔐 OnCrypto
 
 <div align="center">
 
-https://img.shields.io/badge/version-1.6.0-blue.svg
-https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus
-https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake
-https://img.shields.io/badge/Ninja-Build-black
-https://img.shields.io/badge/License-MIT-yellow.svg
-https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-success
+![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)
+![CMake](https://img.shields.io/badge/CMake-3.20+-064F8C?logo=cmake)
+![Ninja](https://img.shields.io/badge/Ninja-Build-black)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-success)
 
-Modern Cross-Platform Encryption Library & CLI built with C++20
+**Modern Cross-Platform Encryption Library & CLI built with C++20**
 
 </div>
 
 ---
 
-📚 Table of Contents
+## 📚 Table of Contents
 
-· Introduction
-· Features
-· Supported Algorithms
-· Automatic Algorithm Selection
-· Architecture
-· Project Structure
-· Requirements
-· Installation
-· CLI Usage
-· Library Usage
-· Streaming API
-· Running Tests
-· Version History
-· License
-· Contact
+- [Introduction](#-introduction)
+- [Features](#-features)
+- [Supported Algorithms](#-supported-algorithms)
+- [Automatic Algorithm Selection](#-automatic-algorithm-selection)
+- [Architecture](#-architecture)
+- [Project Structure](#-project-structure)
+- [Requirements](#-requirements)
+- [Installation & Building](#-installation--building)
+- [CLI Usage](#-cli-usage)
+- [Library Usage](#-library-usage)
+- [Streaming API](#-streaming-api)
+- [C ABI Engine](#-c-abi-engine)
+- [Running Tests](#-running-tests)
+- [Version History](#-version-history)
+- [License](#-license)
+- [Contact](#-contact)
 
 ---
 
-📖 Introduction
+## 📖 Introduction
 
-OnCrypto is a modern, lightweight, and high-performance cross-platform encryption library written in C++20.
+**OnCrypto** is a modern, lightweight, and high-performance cross-platform encryption library written in **C++20**.
 
 It provides both:
 
-· 🖥 Command Line Interface (CLI)
-· 📚 Shared and Static Libraries (liboncrypto.so / liboncrypto.a / oncrypto.dll)
+- 🖥 **Command Line Interface (CLI)** (`oncrypto_cli`)
+- 📚 **Library APIs** (`liboncrypto.so` / `liboncrypto.a`)
 
 The library features a decoupled, backend-agnostic design with high-security authenticated encryption algorithms and automatic algorithm selection.
 
-🎯 Design Philosophy
+### 🎯 Design Philosophy
 
-· Simple API – Just encrypt() and decrypt()
-· Smart Defaults – Auto-selects the optimal algorithm for your payload size
-· Modular Backend – Crypto backend is completely isolated via an abstracted C ABI interface (oncrypto_engine)
-· Self-Hosting Evolution – Transitioned to an independent core model powered by liboncrypto
-· Cross-Platform – Native support across Linux, macOS, Windows, and Android
-· Production Ready – Fully unit-tested with 1052+ assertions
-
----
-
-✨ Features
-
-Feature Status
-🔐 AES-256-GCM ✅
-⚡ ChaCha20-Poly1305 ✅
-🚀 XChaCha20-Poly1305 ✅
-🤖 Automatic Algorithm Selection ✅
-🔑 PBKDF2-HMAC-SHA256 Key Derivation ✅
-🧂 16-byte Random Salt ✅
-🔄 Shared Library (liboncrypto.so) ✅
-📦 Static Library (liboncrypto.a) ✅
-💻 Interactive & Direct CLI Tool ✅
-🌊 Streaming Support (Large Files) ✅
-📦 OnC Binary Format (ONC1) ✅
-🧪 Unit Tests (doctest Integration) ✅
-🌍 Cross Platform ✅
-⚙ CMake + Ninja Build System ✅
+- **Simple API** – Core functions like `crypto::encrypt()` and `crypto::decrypt()`
+- **Smart Defaults** – Auto-selects the optimal algorithm for your payload size
+- **Modular Backend** – Crypto backend is isolated via an abstracted C ABI layer (`oncrypto_engine`)
+- **Cross-Platform** – Native support across Linux, macOS, Windows, and Android
+- **Production Ready** – Fully unit-tested (14 test cases, 1052 assertions passing)
 
 ---
 
-🔐 Supported Algorithms
+## ✨ Features
 
-Algorithm Security Speed Best For
-XChaCha20-Poly1305 ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐⭐ Small data (<1KB)
-ChaCha20-Poly1305 ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐☆ Medium files (1KB - 1MB)
-AES-256-GCM ⭐⭐⭐⭐⭐ ⭐⭐⭐⭐⭐ Large files (>1MB)
+| Feature | Status |
+|----------|--------|
+| 🔐 AES-256-GCM | ✅ |
+| ⚡ ChaCha20-Poly1305 | ✅ |
+| 🚀 XChaCha20-Poly1305 | ✅ |
+| 🤖 Automatic Algorithm Selection | ✅ |
+| 🔑 PBKDF2-HMAC-SHA256 Key Derivation | ✅ |
+| 🔄 Shared (`liboncrypto.so`) & Static (`liboncrypto.a`) Libraries | ✅ |
+| 💻 Interactive & Command Line Interface (`oncrypto_cli`) | ✅ |
+| 🌊 Streaming Encryption & Decryption | ✅ |
+| 📦 OnC Binary Format | ✅ |
+| 🧪 Unit Tests (`oncrypto_test`, `oncrypto_cli_test`) | ✅ |
+| 🌍 Cross Platform | ✅ |
+| ⚙ CMake + Ninja Build System | ✅ |
 
 ---
 
-🤖 Automatic Algorithm Selection
+## 🔐 Supported Algorithms
+
+| Algorithm | Security | Speed | Best For |
+|-----------|----------|-------|----------|
+| **XChaCha20-Poly1305** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Small data (<1KB) |
+| **ChaCha20-Poly1305** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐☆ | Medium files (1KB - 1MB) |
+| **AES-256-GCM** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | Large files (>1MB) |
+
+---
+
+## 🤖 Automatic Algorithm Selection
 
 OnCrypto dynamically evaluates the payload size to pick the safest and most efficient algorithm for the task:
 
-· Payload < 1 KB: Uses XChaCha20-Poly1305 (Optimized for short strings, keys, or metadata with extended nonce size)
-· 1 KB ≤ Payload ≤ 1 MB: Uses ChaCha20-Poly1305 (Balanced performance for general data)
-· Payload > 1 MB: Uses AES-256-GCM (Leverages hardware acceleration for bulk processing)
+- **Payload < 1 KB:** Uses **XChaCha20-Poly1305**
+- **1 KB ≤ Payload ≤ 1 MB:** Uses **ChaCha20-Poly1305**
+- **Payload > 1 MB:** Uses **AES-256-GCM**
 
 ---
 
-🏗 Architecture
+## 🏗 Architecture
 
 ```text
 [ Application / CLI ]
          │
          ▼
-[ Public C++ SDK Layer ] (crypto:: namespace, Streaming, Builder)
+[ Public C++ SDK Layer ] (crypto::, onc::streaming::, crypto::builder::)
          │
          ▼
-[ Core Engine / CryptoRepository ]
+[ C ABI Engine Layer ] (oncrypto_engine)
          │
          ▼
-[ C ABI Engine Layer ] (oncrypto_engine.h)
-         │
-         ▼
-[ Backend Implementation ] (OpenSSL)
-
+[ Internal Crypto Backend ]
 ```
-
-Note: OpenSSL serves as the internal backend implementation and is not exposed through the public API.
 
 ---
 
-📂 Project Structure
+## 📂 Project Structure
 
 ```text
-oncrypto_cli/
+oncrypto/
 ├── CMakeLists.txt         # Root build script
 ├── include/               # Engine C ABI public header
 │   └── oncrypto_engine.h
 ├── core/                  # Core Library implementation
-│   ├── include/           # C++ SDK headers (crypto:: namespace)
+│   ├── include/           # C++ SDK headers
 │   └── src/               # Core repository, backend & format engines
 ├── cli/                   # Command line interface application
 │   └── src/main.cpp
-├── tests/                 # Unit tests (doctest)
-│   ├── oncrypto_test      # Library tests
-│   └── oncrypto_cli_test  # CLI tests
-├── docs/                  # Detailed architectural and API documentation
+├── tests/                 # Unit tests
+├── docs/                  # Architectural and API documentation
 └── examples/              # Usage examples
-
 ```
 
 ---
 
-⚙ Requirements
+## ⚙ Requirements
 
-· C++ Compiler: Modern compiler with C++20 support (GCC 10+, Clang 12+, MSVC 2019+)
-· CMake: Version 3.20 or higher
-· Build System: Ninja (recommended), Make, or MSVC/IDE generators
+* **C++ Compiler:** Modern compiler with C++20 support (`GCC 10+`, `Clang 12+`, `MSVC 2019+`)
+* **CMake:** Version 3.20 or higher
+* **Build System:** Ninja
 
 ---
 
-🛠 Installation & Building
+## 🛠 Installation & Building
 
 ```bash
 # Clone the repository
-git clone https://github.com/gitdroidand/oncrypto_cli.git
+git clone [https://github.com/gitdroidand/oncrypto_cli.git](https://github.com/gitdroidand/oncrypto_cli.git)
 cd oncrypto_cli
 
 # Create build directory
-mkdir build && cd build
+mkdir build
+cd build
 
-# Configure and build
+# Configure and build using Ninja
 cmake -G Ninja ..
 ninja
-
-# Build outputs:
-# - liboncrypto.so / liboncrypto.a
-# - oncrypto_cli
-# - oncrypto_test
-# - oncrypto_cli_test
 ```
+
+Build outputs in `build/`:
+- `liboncrypto.so` (Shared library)
+- `liboncrypto.a` (Static library)
+- `oncrypto_cli` (CLI executable)
+- `oncrypto_test` (Test executable)
+- `oncrypto_cli_test` (CLI test executable)
 
 ---
 
-💻 CLI Usage
+## 💻 CLI Usage
 
-OnCrypto CLI supports both interactive mode and direct command arguments.
+OnCrypto CLI supports direct command arguments as well as interactive mode.
 
-Interactive Mode
+### Direct Command Examples
 
-Launch the interactive prompt:
-
+Encrypt text directly:
 ```bash
-./oncrypto_cli -i
-```
-
-Command Line Arguments
-
-```
-Usage:
-  oncrypto_cli [options]
-
-Options:
-  -text STRING
-  -file PATH
-  -key PASSWORD
-  -encrypt
-  -decrypt
-  -out PATH
-  -i
-  -interactive
-  -q
-  -quiet
-  -no-algo
-  -h
-  -help
-```
-
-Examples
-
-```bash
-# Encrypt text
 ./oncrypto_cli -text "Hello" -key "secret" -encrypt
+```
 
-# Encrypt file
+Encrypt a file:
+```bash
 ./oncrypto_cli -file secret.txt -key pass123 -out encrypted.bin
+```
 
-# Decrypt file
+Decrypt a file:
+```bash
 ./oncrypto_cli -file encrypted.bin -key pass123 -decrypt
+```
 
-# Interactive mode
+### Command Line Options
+
+```text
+-text STRING     Input text string
+-file PATH       Input file path
+-key PASSWORD    Encryption/decryption password
+-encrypt         Encrypt payload
+-decrypt         Decrypt payload
+-out PATH        Output file path
+-i, -interactive Run in interactive mode
+-q, -quiet       Quiet mode
+-no-algo         Disable algorithm display
+-h, -help        Show help options
+```
+
+### Interactive Mode
+
+Launch interactive mode using `-i` or `-interactive`:
+
+```bash
 ./oncrypto_cli -i
 ```
 
 ---
 
-📚 Library Usage
+## 📚 Library Usage
 
-High-Level API (C++)
+All public C++ SDK functions are located under the `crypto::` namespace.
+
+### Basic API
 
 ```cpp
 #include <oncrypto/oncrypto.hpp>
 #include <iostream>
-#include <vector>
 
 int main() {
-    std::string plaintext = "Hello, OnCrypto 1.6!";
-    std::string password = "MySecurePassword123";
+    std::string text = "Hello, OnCrypto!";
+    std::string password = "SecretPassword123";
 
-    // Auto-selected encryption
-    std::vector<uint8_t> ciphertext = crypto::encrypt(plaintext, password);
+    // Encryption & Decryption
+    auto encrypted = crypto::encrypt(text, password);
+    auto decrypted = crypto::decrypt(encrypted, password);
 
-    // Decryption
-    std::string decrypted = crypto::decrypt(ciphertext, password);
-    
-    std::cout << "Decrypted: " << decrypted << "\n";
-
-    // Get version info
+    // Version & Algorithm information
     std::cout << "Version: " << crypto::getVersion() << "\n";
     std::cout << "Algorithm: " << crypto::getAlgorithmName() << "\n";
-    
+
     return 0;
 }
 ```
 
-Builder API
+### File Encryption & Decryption
 
 ```cpp
-#include <oncrypto/oncrypto.hpp>
-
-// Encryption using builder pattern
-crypto::builder::Encryptor encryptor;
-encryptor.setPlaintext(plaintext);
-encryptor.setPassword(password);
-std::vector<uint8_t> ciphertext = encryptor.encrypt();
-
-// Decryption using builder pattern
-crypto::builder::Decryptor decryptor;
-decryptor.setCiphertext(ciphertext);
-decryptor.setPassword(password);
-std::string decrypted = decryptor.decrypt();
+crypto::encryptFile("plain.txt", "encrypted.bin", "pass123");
+crypto::decryptFile("encrypted.bin", "decrypted.txt", "pass123");
 ```
 
-Advanced API
+### Builder & Advanced APIs
+
+For object-oriented and custom workflows:
+- `crypto::builder::Encryptor`
+- `crypto::builder::Decryptor`
+- `crypto::advanced::encrypt(...)`
+- `crypto::advanced::decrypt(...)`
+
+---
+
+## 🌊 Streaming API
+
+For large file streaming, use the `onc::streaming::` namespace:
 
 ```cpp
 #include <oncrypto/oncrypto.hpp>
 
-// Explicit algorithm selection (optional)
-std::vector<uint8_t> ciphertext = crypto::advanced::encrypt(
-    plaintext, password, crypto::Algorithm::AES_256_GCM
-);
-
-std::string decrypted = crypto::advanced::decrypt(
-    ciphertext, password, crypto::Algorithm::AES_256_GCM
-);
-```
-
-File Encryption
-
-```cpp
-#include <oncrypto/oncrypto.hpp>
-
-// Encrypt file
-crypto::encryptFile("input.txt", "output.onc", password);
-
-// Decrypt file
-crypto::decryptFile("output.onc", "decrypted.txt", password);
+onc::streaming::EncryptStream encryptStream;
+onc::streaming::DecryptStream decryptStream;
 ```
 
 ---
 
-🌊 Streaming API
+## 🔌 C ABI Engine
 
-For streaming large files efficiently without loading everything into memory:
-
-```cpp
-#include <oncrypto/Streaming.hpp>
-#include <fstream>
-
-// Encryption stream
-std::ifstream input("large_file.bin", std::ios::binary);
-std::ofstream output("large_file.bin.onc", std::ios::binary);
-onc::streaming::EncryptStream encryptor(input, output, "password");
-encryptor.process();
-
-// Decryption stream
-std::ifstream encrypted("large_file.bin.onc", std::ios::binary);
-std::ofstream decrypted("large_file_decrypted.bin", std::ios::binary);
-onc::streaming::DecryptStream decryptor(encrypted, decrypted, "password");
-decryptor.process();
-```
+The project contains a public C ABI header (`oncrypto_engine.*`), acting as an internal abstraction layer between the public C++ SDK and the underlying cryptography backend.
 
 ---
 
-🧪 Running Tests
+## 🧪 Running Tests
 
-OnCrypto utilizes doctest for its test suite:
+Build the repository and execute the built test targets:
 
 ```bash
-# Run all tests
 cd build
 ./oncrypto_test
 ./oncrypto_cli_test
-
-# Or use CTest
-ctest --output-on-failure
 ```
 
-Current test coverage: 14 test cases with 1052 assertions - all passing.
+**Status:** 14 test cases, 1052 assertions (All passing).
 
 ---
 
-📜 Version History
+## 📜 Version History
 
-v1.6.0
-
-· Core Decoupling & Independence: Completely rewrote core logic to rely directly on liboncrypto via an abstracted C ABI layer
-· Enhanced memory handling and backend isolation
-
-v1.5.0
-
-· Added Streaming API support for ultra-large files
-· Introduced OnCFormat binary layout specification (ONC1)
-
-v1.0.0
-
-· Initial release with AEAD algorithm support and automatic selection
+* **v1.6.0**
+  * Core C ABI engine abstraction (`oncrypto_engine`).
+  * Updated CMake build targets (`liboncrypto.so`, `liboncrypto.a`, `oncrypto_cli`).
+  * Full test suite validation (14 test cases, 1052 assertions passing).
+* **v1.5.0**
+  * Added Streaming API (`onc::streaming::EncryptStream`, `onc::streaming::DecryptStream`).
+  * Support for OnC binary layout format.
+* **v1.0.0**
+  * Initial release with AEAD support and automatic algorithm selection.
 
 ---
 
-📄 License
+## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the **MIT License**.
 
 ---
 
-📬 Contact & Support
+## 📬 Contact & Support
 
-· Email: droidandsoftwaresinc@gmail.com
-· Telegram: @droidand_off
-· X (Twitter): @xdroidand
+* **Email:** [droidandsoftwaresinc@gmail.com](mailto:droidandsoftwaresinc@gmail.com)
+* **Telegram:** [@droidand_off](https://t.me/droidand_off)
+* **X (Twitter):** [@xdroidand](https://x.com/xdroidand)
