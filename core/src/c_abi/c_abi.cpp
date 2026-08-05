@@ -4,13 +4,31 @@
 #include <vector>
 #include <string>
 #include <cstring>
-#include <thread>
+#include <new>        // for std::bad_alloc
 
-// نگهداری آخرین پیام خطا به صورت Thread-Local
+// =========================================================================
+// Thread‑local last error message
+// =========================================================================
+
 static thread_local std::string g_last_error = "";
+
+static void clear_last_error() {
+    g_last_error.clear();
+}
 
 static void set_last_error(const std::string& err) {
     g_last_error = err;
+}
+
+// =========================================================================
+// Helper: reset onc_buffer to a safe state
+// =========================================================================
+
+static void reset_buffer(onc_buffer* buf) {
+    if (buf) {
+        buf->data = nullptr;
+        buf->size = 0;
+    }
 }
 
 // =========================================================================
@@ -34,7 +52,14 @@ struct onc_stream_s {
 // =========================================================================
 
 const char* onc_version(void) {
-    static std::string ver = crypto::getVersion();
+    // Thread‑safe static local initialization (C++11 guarantees it)
+    static const std::string ver = []() -> std::string {
+        try {
+            return crypto::getVersion();
+        } catch (...) {
+            return "unknown";
+        }
+    }();
     return ver.c_str();
 }
 
@@ -77,6 +102,22 @@ void onc_string_free(onc_string* str) {
 // Buffer Encryption & Decryption
 // =========================================================================
 
+static std::vector<unsigned char> make_vector(const uint8_t* data, size_t len) {
+    std::vector<unsigned char> vec;
+    vec.resize(len);
+    if (len > 0 && data != nullptr) {
+        std::memcpy(vec.data(), data, len);
+    }
+    return vec;
+}
+
+static std::string make_string(const uint8_t* data, size_t len) {
+    if (data == nullptr && len == 0) {
+        return std::string();
+    }
+    return std::string(reinterpret_cast<const char*>(data), len);
+}
+
 onc_status onc_encrypt_buffer(
     const uint8_t* input,
     size_t input_len,
@@ -84,14 +125,25 @@ onc_status onc_encrypt_buffer(
     size_t key_len,
     onc_buffer* out_buf
 ) {
-    if (!input || !key || !out_buf) {
-        set_last_error("Invalid null pointer argument.");
+    clear_last_error();
+    reset_buffer(out_buf);
+
+    if (out_buf == nullptr) {
+        set_last_error("Output buffer pointer is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (input_len > 0 && input == nullptr) {
+        set_last_error("Input pointer is null but length > 0.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
         return ONC_ERROR_INVALID_ARGUMENT;
     }
 
     try {
-        std::vector<unsigned char> in_vec(input, input + input_len);
-        std::string pwd(reinterpret_cast<const char*>(key), key_len);
+        std::vector<unsigned char> in_vec = make_vector(input, input_len);
+        std::string pwd = make_string(key, key_len);
 
         std::vector<unsigned char> encrypted = crypto::encrypt(in_vec, pwd);
 
@@ -100,11 +152,17 @@ onc_status onc_encrypt_buffer(
         std::memcpy(out_buf->data, encrypted.data(), encrypted.size());
 
         return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        reset_buffer(out_buf);
+        return ONC_ERROR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
         set_last_error(e.what());
+        reset_buffer(out_buf);
         return ONC_ERROR_ENCRYPTION_FAILED;
     } catch (...) {
         set_last_error("Unknown internal encryption error.");
+        reset_buffer(out_buf);
         return ONC_ERROR_INTERNAL;
     }
 }
@@ -116,14 +174,25 @@ onc_status onc_decrypt_buffer(
     size_t key_len,
     onc_buffer* out_buf
 ) {
-    if (!input || !key || !out_buf) {
-        set_last_error("Invalid null pointer argument.");
+    clear_last_error();
+    reset_buffer(out_buf);
+
+    if (out_buf == nullptr) {
+        set_last_error("Output buffer pointer is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (input_len > 0 && input == nullptr) {
+        set_last_error("Input pointer is null but length > 0.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
         return ONC_ERROR_INVALID_ARGUMENT;
     }
 
     try {
-        std::vector<unsigned char> in_vec(input, input + input_len);
-        std::string pwd(reinterpret_cast<const char*>(key), key_len);
+        std::vector<unsigned char> in_vec = make_vector(input, input_len);
+        std::string pwd = make_string(key, key_len);
 
         std::vector<unsigned char> decrypted = crypto::decrypt(in_vec, pwd);
 
@@ -132,11 +201,17 @@ onc_status onc_decrypt_buffer(
         std::memcpy(out_buf->data, decrypted.data(), decrypted.size());
 
         return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        reset_buffer(out_buf);
+        return ONC_ERROR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
         set_last_error(e.what());
+        reset_buffer(out_buf);
         return ONC_ERROR_DECRYPTION_FAILED;
     } catch (...) {
         set_last_error("Unknown internal decryption error.");
+        reset_buffer(out_buf);
         return ONC_ERROR_INTERNAL;
     }
 }
@@ -151,18 +226,34 @@ onc_status onc_encrypt_file(
     const uint8_t* key,
     size_t key_len
 ) {
-    if (!src_path || !dst_path || !key) {
-        set_last_error("Invalid null pointer argument.");
+    clear_last_error();
+
+    if (!src_path || !dst_path) {
+        set_last_error("File path pointer is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
         return ONC_ERROR_INVALID_ARGUMENT;
     }
 
     try {
-        std::string pwd(reinterpret_cast<const char*>(key), key_len);
+        std::string pwd = make_string(key, key_len);
         bool ok = crypto::encryptFile(src_path, dst_path, pwd);
-        return ok ? ONC_SUCCESS : ONC_ERROR_IO;
+        if (!ok) {
+            set_last_error("File encryption operation failed (I/O error).");
+            return ONC_ERROR_IO;
+        }
+        return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        return ONC_ERROR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return ONC_ERROR_ENCRYPTION_FAILED;
+    } catch (...) {
+        set_last_error("Unknown internal file encryption error.");
+        return ONC_ERROR_INTERNAL;
     }
 }
 
@@ -172,18 +263,34 @@ onc_status onc_decrypt_file(
     const uint8_t* key,
     size_t key_len
 ) {
-    if (!src_path || !dst_path || !key) {
-        set_last_error("Invalid null pointer argument.");
+    clear_last_error();
+
+    if (!src_path || !dst_path) {
+        set_last_error("File path pointer is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
         return ONC_ERROR_INVALID_ARGUMENT;
     }
 
     try {
-        std::string pwd(reinterpret_cast<const char*>(key), key_len);
+        std::string pwd = make_string(key, key_len);
         bool ok = crypto::decryptFile(src_path, dst_path, pwd);
-        return ok ? ONC_SUCCESS : ONC_ERROR_IO;
+        if (!ok) {
+            set_last_error("File decryption operation failed (I/O error).");
+            return ONC_ERROR_IO;
+        }
+        return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        return ONC_ERROR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return ONC_ERROR_DECRYPTION_FAILED;
+    } catch (...) {
+        set_last_error("Unknown internal file decryption error.");
+        return ONC_ERROR_INTERNAL;
     }
 }
 
@@ -192,35 +299,100 @@ onc_status onc_decrypt_file(
 // =========================================================================
 
 onc_builder_t onc_builder_create(void) {
-    return new (std::nothrow) onc_builder_s();
+    clear_last_error();
+    onc_builder_t builder = nullptr;
+    try {
+        builder = new (std::nothrow) onc_builder_s();
+        if (!builder) {
+            set_last_error("Out of memory");
+        }
+    } catch (...) {
+        set_last_error("Unknown exception during builder construction");
+        // In case of exception, ensure we return null
+        return nullptr;
+    }
+    return builder;
 }
 
 onc_status onc_builder_set_key(onc_builder_t builder, const uint8_t* key, size_t key_len) {
-    if (!builder || !key) return ONC_ERROR_INVALID_ARGUMENT;
-    std::string pwd(reinterpret_cast<const char*>(key), key_len);
-    builder->encryptor.password(pwd);
-    builder->decryptor.password(pwd);
-    return ONC_SUCCESS;
+    clear_last_error();
+    if (!builder) {
+        set_last_error("Builder handle is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        std::string pwd = make_string(key, key_len);
+        builder->encryptor.password(pwd);
+        builder->decryptor.password(pwd);
+        return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        return ONC_ERROR_OUT_OF_MEMORY;
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        return ONC_ERROR_INTERNAL;
+    } catch (...) {
+        set_last_error("Unknown error setting key");
+        return ONC_ERROR_INTERNAL;
+    }
 }
 
 onc_status onc_builder_set_algorithm(onc_builder_t builder, const char* algo_name) {
-    if (!builder || !algo_name) return ONC_ERROR_INVALID_ARGUMENT;
-    
-    crypto::builder::Algorithm algo = crypto::builder::Algorithm::Auto;
-    std::string name(algo_name);
-    if (name == "AES256_GCM") algo = crypto::builder::Algorithm::AES256_GCM;
-    else if (name == "ChaCha20") algo = crypto::builder::Algorithm::ChaCha20;
-    else if (name == "XChaCha20") algo = crypto::builder::Algorithm::XChaCha20;
+    clear_last_error();
+    if (!builder || !algo_name) {
+        set_last_error("Builder handle or algorithm name is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
 
-    builder->encryptor.algorithm(algo);
-    builder->decryptor.algorithm(algo);
-    return ONC_SUCCESS;
+    std::string name(algo_name);
+    crypto::builder::Algorithm algo;
+    if (name == "Auto") {
+        algo = crypto::builder::Algorithm::Auto;
+    } else if (name == "AES256_GCM") {
+        algo = crypto::builder::Algorithm::AES256_GCM;
+    } else if (name == "ChaCha20") {
+        algo = crypto::builder::Algorithm::ChaCha20;
+    } else if (name == "XChaCha20") {
+        algo = crypto::builder::Algorithm::XChaCha20;
+    } else {
+        set_last_error("Unsupported algorithm: " + name);
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+
+    try {
+        builder->encryptor.algorithm(algo);
+        builder->decryptor.algorithm(algo);
+        return ONC_SUCCESS;
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        return ONC_ERROR_INTERNAL;
+    } catch (...) {
+        set_last_error("Unknown error setting algorithm");
+        return ONC_ERROR_INTERNAL;
+    }
 }
 
 onc_status onc_builder_set_iterations(onc_builder_t builder, uint32_t iterations) {
-    if (!builder) return ONC_ERROR_INVALID_ARGUMENT;
-    builder->encryptor.iterations(static_cast<int>(iterations));
-    return ONC_SUCCESS;
+    clear_last_error();
+    if (!builder) {
+        set_last_error("Builder handle is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    try {
+        builder->encryptor.iterations(static_cast<int>(iterations));
+        return ONC_SUCCESS;
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        return ONC_ERROR_INTERNAL;
+    } catch (...) {
+        set_last_error("Unknown error setting iterations");
+        return ONC_ERROR_INTERNAL;
+    }
 }
 
 onc_status onc_builder_encrypt(
@@ -229,10 +401,20 @@ onc_status onc_builder_encrypt(
     size_t input_len,
     onc_buffer* out_buf
 ) {
-    if (!builder || !input || !out_buf) return ONC_ERROR_INVALID_ARGUMENT;
+    clear_last_error();
+    reset_buffer(out_buf);
+
+    if (!builder || !out_buf) {
+        set_last_error("Builder or output buffer handle is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (input_len > 0 && input == nullptr) {
+        set_last_error("Input pointer is null but length > 0.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
 
     try {
-        std::vector<unsigned char> in_vec(input, input + input_len);
+        std::vector<unsigned char> in_vec = make_vector(input, input_len);
         std::vector<unsigned char> res = builder->encryptor.encrypt(in_vec);
 
         out_buf->data = new uint8_t[res.size()];
@@ -240,14 +422,23 @@ onc_status onc_builder_encrypt(
         std::memcpy(out_buf->data, res.data(), res.size());
 
         return ONC_SUCCESS;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        reset_buffer(out_buf);
+        return ONC_ERROR_OUT_OF_MEMORY;
     } catch (const std::exception& e) {
         set_last_error(e.what());
+        reset_buffer(out_buf);
         return ONC_ERROR_ENCRYPTION_FAILED;
+    } catch (...) {
+        set_last_error("Unknown internal builder encryption error.");
+        reset_buffer(out_buf);
+        return ONC_ERROR_INTERNAL;
     }
 }
 
 void onc_builder_destroy(onc_builder_t builder) {
-    delete builder;
+    delete builder;   // safe with null
 }
 
 // =========================================================================
@@ -255,23 +446,67 @@ void onc_builder_destroy(onc_builder_t builder) {
 // =========================================================================
 
 onc_stream_t onc_stream_create_encryptor(const uint8_t* key, size_t key_len) {
-    if (!key) return nullptr;
-    auto* st = new (std::nothrow) onc_stream_s();
-    if (st) {
-        st->key = std::string(reinterpret_cast<const char*>(key), key_len);
-        st->is_encrypt = true;
+    clear_last_error();
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
+        return nullptr;
     }
-    return st;
+
+    onc_stream_t st = nullptr;
+    try {
+        st = new (std::nothrow) onc_stream_s();
+        if (!st) {
+            set_last_error("Out of memory");
+            return nullptr;
+        }
+        st->key = make_string(key, key_len);
+        st->is_encrypt = true;
+        return st;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        delete st;
+        return nullptr;
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        delete st;
+        return nullptr;
+    } catch (...) {
+        set_last_error("Unknown error creating encryptor");
+        delete st;
+        return nullptr;
+    }
 }
 
 onc_stream_t onc_stream_create_decryptor(const uint8_t* key, size_t key_len) {
-    if (!key) return nullptr;
-    auto* st = new (std::nothrow) onc_stream_s();
-    if (st) {
-        st->key = std::string(reinterpret_cast<const char*>(key), key_len);
-        st->is_encrypt = false;
+    clear_last_error();
+    if (key_len > 0 && key == nullptr) {
+        set_last_error("Key pointer is null but length > 0.");
+        return nullptr;
     }
-    return st;
+
+    onc_stream_t st = nullptr;
+    try {
+        st = new (std::nothrow) onc_stream_s();
+        if (!st) {
+            set_last_error("Out of memory");
+            return nullptr;
+        }
+        st->key = make_string(key, key_len);
+        st->is_encrypt = false;
+        return st;
+    } catch (const std::bad_alloc&) {
+        set_last_error("Out of memory");
+        delete st;
+        return nullptr;
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        delete st;
+        return nullptr;
+    } catch (...) {
+        set_last_error("Unknown error creating decryptor");
+        delete st;
+        return nullptr;
+    }
 }
 
 onc_status onc_stream_update(
@@ -280,22 +515,40 @@ onc_status onc_stream_update(
     size_t chunk_len,
     onc_buffer* out_buf
 ) {
-    if (!stream || !chunk || !out_buf) return ONC_ERROR_INVALID_ARGUMENT;
-    
-    // Stub implementation for stream buffer updates
-    out_buf->data = nullptr;
-    out_buf->size = 0;
-    return ONC_SUCCESS;
+    clear_last_error();
+    reset_buffer(out_buf);
+
+    if (!stream || !out_buf) {
+        set_last_error("Stream or output buffer handle is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+    if (chunk_len > 0 && chunk == nullptr) {
+        set_last_error("Chunk pointer is null but length > 0.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+
+    // Streaming is not implemented in the underlying C++ library.
+    // We return a clear error instead of faking success.
+    set_last_error("Streaming API is not implemented in this version.");
+    return ONC_ERROR_INTERNAL;
 }
 
-onc_status onc_stream_final(onc_stream_t stream, onc_buffer* out_buf) {
-    if (!stream || !out_buf) return ONC_ERROR_INVALID_ARGUMENT;
+onc_status onc_stream_final(
+    onc_stream_t stream,
+    onc_buffer* out_buf
+) {
+    clear_last_error();
+    reset_buffer(out_buf);
 
-    out_buf->data = nullptr;
-    out_buf->size = 0;
-    return ONC_SUCCESS;
+    if (!stream || !out_buf) {
+        set_last_error("Stream or output buffer handle is null.");
+        return ONC_ERROR_INVALID_ARGUMENT;
+    }
+
+    set_last_error("Streaming API is not implemented in this version.");
+    return ONC_ERROR_INTERNAL;
 }
 
 void onc_stream_destroy(onc_stream_t stream) {
-    delete stream;
+    delete stream;   // safe with null
 }
