@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(OnCrypto VERSION 1.6.0 LANGUAGES CXX)
+project(OnCrypto VERSION 1.6.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +33,7 @@ set(CORE_PUBLIC_SOURCES
     core/src/Builder.cpp
     core/src/Advanced.cpp
     core/src/repo/CryptoRepository.cpp
+    core/src/c_abi/c_abi.cpp
     core/src/cryption/algo/AES256GCM.cpp
     core/src/cryption/algo/ChaCha20.cpp
     core/src/cryption/algo/XChaCha20.cpp
@@ -62,7 +63,7 @@ target_include_directories(oncrypto_engine_objs
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_definitions(oncrypto_core_objs PRIVATE ONCRYPTO_BUILD)
+target_compile_definitions(oncrypto_core_objs PRIVATE ONCRYPTO_BUILD ONCRYPTO_C_ABI_BUILD)
 
 target_compile_definitions(oncrypto_engine_objs PRIVATE ONCRYPTO_BUILD ONCRYPTO_ENGINE_BUILD)
 
@@ -113,10 +114,8 @@ target_link_libraries(oncrypto
         ${ONCRYPTO_OPENSSL_LIB}
 )
 
-target_compile_definitions(oncrypto PRIVATE ONCRYPTO_BUILD)
+target_compile_definitions(oncrypto PRIVATE ONCRYPTO_BUILD ONCRYPTO_C_ABI_BUILD)
 
-# Removed explicit 'CXX_VISIBILITY_PRESET hidden' and 'VISIBILITY_INLINES_HIDDEN ON' 
-# to allow symbols to remain visible by default when building the shared library.
 set_target_properties(oncrypto PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
@@ -221,7 +220,9 @@ endif()
 
 install(DIRECTORY core/include/oncrypto
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.hpp"
+    FILES_MATCHING 
+        PATTERN "*.hpp"
+        PATTERN "*.h"
     PATTERN "backend" EXCLUDE
 )
 
