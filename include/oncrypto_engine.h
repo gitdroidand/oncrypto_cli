@@ -6,28 +6,21 @@
 extern "C" {
 #endif
 
-/* Stable public engine C ABI. Implementations may be swapped without changing
-   the public C++ SDK surface. */
+/* Stable public engine C ABI. 
+   This API is internal – it is compiled into the same library as the core.
+   On Windows we do not use dllimport/dllexport; the symbols are visible internally.
+   On ELF platforms we mark them with default visibility so they are not hidden
+   when -fvisibility=hidden is used. */
+
+/* Visibility macro – empty on Windows, default visibility on Unix */
 #if defined(_WIN32) || defined(__CYGWIN__)
-  #if defined(ONCRYPTO_ENGINE_BUILD)
-    #if defined(__GNUC__)
-      #define ONCRYPTO_ENGINE_API __attribute__((dllexport))
-    #else
-      #define ONCRYPTO_ENGINE_API __declspec(dllexport)
-    #endif
-  #else
-    #if defined(__GNUC__)
-      #define ONCRYPTO_ENGINE_API __attribute__((dllimport))
-    #else
-      #define ONCRYPTO_ENGINE_API __declspec(dllimport)
-    #endif
-  #endif
-#else
-  #if defined(ONCRYPTO_ENGINE_BUILD)
-    #define ONCRYPTO_ENGINE_API __attribute__((visibility("default")))
-  #else
     #define ONCRYPTO_ENGINE_API
-  #endif
+#else
+    #if defined(ONCRYPTO_ENGINE_BUILD) && (defined(__ELF__) || defined(__MACH__))
+        #define ONCRYPTO_ENGINE_API __attribute__((visibility("default")))
+    #else
+        #define ONCRYPTO_ENGINE_API
+    #endif
 #endif
 
 #define ONCRYPTO_ENGINE_VERSION_MAJOR 1

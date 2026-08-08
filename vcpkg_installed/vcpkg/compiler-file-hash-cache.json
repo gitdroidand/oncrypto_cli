@@ -1,0 +1,26 @@
+{
+  "/usr/bin/c++" : 
+  {
+    "hash" : "067ea1aebac31a761576105ce20b891fc6881430",
+    "size" : 1305304,
+    "timestamp" : 1774174097
+  },
+  "/usr/bin/cc" : 
+  {
+    "hash" : "19aacf92ba6d5267c34e57623c8de23d33d192b7",
+    "size" : 1305304,
+    "timestamp" : 1774174097
+  },
+  "/usr/bin/x86_64-w64-mingw32-g++" : 
+  {
+    "hash" : "9ace073f26897db3fb216fa45c8bc5df4260f28e",
+    "size" : 1767344,
+    "timestamp" : 1695580465
+  },
+  "/usr/bin/x86_64-w64-mingw32-gcc" : 
+  {
+    "hash" : "477b75d2b4ae53822ba2d312d19ba28d34f54a0e",
+    "size" : 1594728,
+    "timestamp" : 1695580465
+  }
+}

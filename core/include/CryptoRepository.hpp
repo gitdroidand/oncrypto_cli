@@ -1,5 +1,6 @@
 #pragma once
 
+#include "oncrypto/Export.hpp"
 #include <vector>
 #include <string>
 #include <memory>
@@ -7,14 +8,14 @@
 
 namespace crypto {
 
-struct EncryptionResult {
+struct ONCRYPTO_API EncryptionResult {
     std::vector<unsigned char> data;
     std::string algorithmName;
     std::string reason;
     std::vector<unsigned char> salt;
 };
 
-class CryptoRepository {
+class ONCRYPTO_API CryptoRepository {
 public:
     CryptoRepository();
     ~CryptoRepository();

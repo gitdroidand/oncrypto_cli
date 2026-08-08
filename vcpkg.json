@@ -1,0 +1,7 @@
+{
+  "name": "oncrypto",
+  "version-string": "1.6.0",
+  "dependencies": [
+    "openssl"
+  ]
+}

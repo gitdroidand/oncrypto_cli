@@ -1,0 +1,2 @@
+a661d1f85a75833c7d7fee03c397791075f6838645d96a7e5f5529f19199b09d  artifacts/linux-x64/liboncrypto.so
+6bf54008d082f81099e404fc4a18eed06f11606e4a6ad6c8bd4a9f36321766ed  artifacts/linux-x64/oncrypto_cli
