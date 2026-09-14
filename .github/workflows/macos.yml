@@ -1,0 +1,81 @@
+name: macOS Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-14
+          - arch: x86_64
+            runner: macos-13
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install cmake ninja openssl@3
+
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON \
+            -DBUILD_STATIC_SDK=ON \
+            -DOPENSSL_ROOT_DIR="$(brew --prefix openssl@3)" \
+            -DOPENSSL_INCLUDE_DIR="$(brew --prefix openssl@3)/include"
+
+      - name: Build
+        run: |
+          cmake --build build --parallel
+
+      - name: Run tests
+        run: |
+          ./build/oncrypto_test
+          ./build/onc_c_unit
+          ./build/oncrypto_cli_test
+
+      - name: Inspect library
+        run: |
+          file build/liboncrypto.dylib
+          otool -L build/liboncrypto.dylib
+
+      - name: Install SDK
+        run: |
+          cmake --install build \
+            --prefix "$PWD/package"
+
+      - name: Package SDK
+        run: |
+          mkdir -p artifact/lib
+          mkdir -p artifact/include
+
+          cp build/liboncrypto.dylib artifact/lib/
+          cp build/liboncrypto.a artifact/lib/ 2>/dev/null || true
+
+          cp -R package/include/* artifact/include/ 2>/dev/null || true
+
+          cd artifact
+          zip -r "../OnCrypto-macOS-${{ matrix.arch }}.zip" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnCrypto-macOS-${{ matrix.arch }}
+          path: OnCrypto-macOS-${{ matrix.arch }}.zip
+          if-no-files-found: error
