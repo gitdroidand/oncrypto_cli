@@ -1,0 +1,10 @@
+[package]
+name = "oncrypto"
+version = "1.6.0"
+edition = "2024"
+
+[lib]
+name = "oncrypto"
+path = "src/lib.rs"
+
+[dependencies]

@@ -29,6 +29,8 @@ project(OnCrypto VERSION 1.6.0 LANGUAGES CXX C)
 # ============================================================
 # Platform detection variables
 # ============================================================
+
+# Windows detection
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows" OR 
    CMAKE_SYSTEM_NAME STREQUAL "CYGWIN" OR 
    CMAKE_SYSTEM_NAME STREQUAL "MSYS" OR
@@ -38,13 +40,30 @@ else()
     set(ONCRYPTO_IS_WINDOWS FALSE)
 endif()
 
+# Android detection
+if(CMAKE_SYSTEM_NAME STREQUAL "Android")
+    set(ONCRYPTO_IS_ANDROID TRUE)
+    set(ONCRYPTO_IS_LINUX FALSE)
+    set(ONCRYPTO_IS_WINDOWS FALSE)
+    message(STATUS "Target platform: Android (${ANDROID_ABI})")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux") 
+    set(ONCRYPTO_IS_LINUX TRUE)
+    set(ONCRYPTO_IS_ANDROID FALSE)
+    message(STATUS "Target platform: Linux")
+else()
+    set(ONCRYPTO_IS_LINUX FALSE)
+    set(ONCRYPTO_IS_ANDROID FALSE)
+endif()
+
 # Detect MinGW vs MSVC on Windows
 if(ONCRYPTO_IS_WINDOWS)
     if(MINGW)
         set(ONCRYPTO_IS_MINGW TRUE)
+        set(ONCRYPTO_IS_MSVC FALSE)
         message(STATUS "Windows target: MinGW toolchain")
     elseif(MSVC)
         set(ONCRYPTO_IS_MSVC TRUE)
+        set(ONCRYPTO_IS_MINGW FALSE)
         message(STATUS "Windows target: MSVC toolchain")
     else()
         message(STATUS "Windows target: unknown toolchain")
@@ -54,10 +73,11 @@ endif()
 # ============================================================
 # Options
 # ============================================================
-option(BUILD_CLI          "Build the oncrypto command line application" ON)
-option(BUILD_TESTS        "Build unit tests" ON)
-option(BUILD_EXAMPLES     "Build example programs" ON)
-option(BUILD_STATIC_SDK   "Build public static SDK library" ON)
+option(BUILD_CLI          "Build the oncrypto command line application" OFF)
+option(BUILD_TESTS        "Build unit tests" OFF)
+option(BUILD_BENCHMARKS   "Build benchmark suite" OFF)
+option(BUILD_EXAMPLES     "Build example programs" OFF)
+option(BUILD_STATIC_SDK   "Build public static SDK library" OFF)
 option(ENABLE_VISIBILITY  "Hide internal symbols in shared library" OFF)
 
 # ============================================================
@@ -68,16 +88,75 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ============================================================
-# Find OpenSSL - Direct path for MinGW
+# Find OpenSSL - Platform specific
 # ============================================================
-if(ONCRYPTO_IS_WINDOWS AND MINGW)
-    # Use the vcpkg_installed directory inside the build tree
+
+if(ONCRYPTO_IS_ANDROID)
+    # ==========================================================
+    # Android: OpenSSL from vcpkg
+    # ==========================================================
+    # Get the vcpkg triplet from environment or CMake cache
+    get_property(VCPKG_TARGET_TRIPLET GLOBAL PROPERTY VCPKG_TARGET_TRIPLET)
+    if(NOT VCPKG_TARGET_TRIPLET)
+        set(VCPKG_TARGET_TRIPLET $ENV{VCPKG_TARGET_TRIPLET})
+    endif()
+    
+    if(NOT VCPKG_TARGET_TRIPLET)
+        message(FATAL_ERROR "VCPKG_TARGET_TRIPLET must be set for Android builds (e.g., arm64-android or armv7-android)")
+    endif()
+    
+    message(STATUS "Android build with vcpkg triplet: ${VCPKG_TARGET_TRIPLET}")
+    
+    # Set OpenSSL paths from vcpkg_installed
+    set(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}")
+    set(OPENSSL_INCLUDE_DIR "${OPENSSL_ROOT_DIR}/include")
+    set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libcrypto.so")
+    set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libssl.so")
+    
+    # Fallback to static if shared not found
+    if(NOT EXISTS "${OPENSSL_CRYPTO_LIBRARY}")
+        set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libcrypto.a")
+        set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libssl.a")
+        message(STATUS "Using static OpenSSL libraries")
+    else()
+        message(STATUS "Using shared OpenSSL libraries")
+    endif()
+    
+    # Verify OpenSSL exists
+    if(NOT EXISTS "${OPENSSL_CRYPTO_LIBRARY}")
+        message(FATAL_ERROR "OpenSSL crypto library not found at: ${OPENSSL_CRYPTO_LIBRARY}\n"
+                           "Please install openssl:${VCPKG_TARGET_TRIPLET} via vcpkg")
+    endif()
+    if(NOT EXISTS "${OPENSSL_INCLUDE_DIR}/openssl/ssl.h")
+        message(FATAL_ERROR "OpenSSL header not found at: ${OPENSSL_INCLUDE_DIR}/openssl/ssl.h")
+    endif()
+    
+    # Create imported targets for OpenSSL
+    add_library(OpenSSL::Crypto SHARED IMPORTED)
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+        IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+    )
+    
+    add_library(OpenSSL::SSL SHARED IMPORTED)
+    set_target_properties(OpenSSL::SSL PROPERTIES
+        IMPORTED_LOCATION "${OPENSSL_SSL_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${OPENSSL_INCLUDE_DIR}"
+    )
+    
+    set(ONCRYPTO_OPENSSL_LIB OpenSSL::Crypto)
+    message(STATUS "OpenSSL for Android found: ${OPENSSL_INCLUDE_DIR}")
+    message(STATUS "  Crypto: ${OPENSSL_CRYPTO_LIBRARY}")
+    
+elseif(ONCRYPTO_IS_WINDOWS AND MINGW)
+    # ==========================================================
+    # Windows MinGW: OpenSSL from vcpkg_installed
+    # ==========================================================
     set(OPENSSL_ROOT_DIR "${CMAKE_CURRENT_BINARY_DIR}/vcpkg_installed/x64-mingw-static")
     set(OPENSSL_INCLUDE_DIR "${OPENSSL_ROOT_DIR}/include")
     set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libcrypto.a")
     set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT_DIR}/lib/libssl.a")
     
-    # Check if files exist
     if(NOT EXISTS "${OPENSSL_CRYPTO_LIBRARY}")
         message(FATAL_ERROR "OpenSSL crypto library not found at: ${OPENSSL_CRYPTO_LIBRARY}")
     endif()
@@ -85,7 +164,6 @@ if(ONCRYPTO_IS_WINDOWS AND MINGW)
         message(FATAL_ERROR "OpenSSL header not found at: ${OPENSSL_INCLUDE_DIR}/openssl/ssl.h")
     endif()
     
-    # Create imported targets
     add_library(OpenSSL::Crypto STATIC IMPORTED)
     set_target_properties(OpenSSL::Crypto PROPERTIES
         IMPORTED_LOCATION "${OPENSSL_CRYPTO_LIBRARY}"
@@ -99,9 +177,12 @@ if(ONCRYPTO_IS_WINDOWS AND MINGW)
     )
     
     set(ONCRYPTO_OPENSSL_LIB OpenSSL::Crypto)
-    message(STATUS "OpenSSL found: ${OPENSSL_INCLUDE_DIR}, ${OPENSSL_CRYPTO_LIBRARY}")
+    message(STATUS "OpenSSL for MinGW found: ${OPENSSL_INCLUDE_DIR}")
+    
 else()
-    # For Linux and MSVC, use find_package
+    # ==========================================================
+    # Linux, macOS, and MSVC: Use find_package
+    # ==========================================================
     find_package(OpenSSL 3 REQUIRED COMPONENTS Crypto)
     if(TARGET OpenSSL::Crypto)
         set(ONCRYPTO_OPENSSL_LIB OpenSSL::Crypto)
@@ -110,21 +191,34 @@ else()
     else()
         message(FATAL_ERROR "OpenSSL Crypto target not found")
     endif()
+    message(STATUS "OpenSSL found via find_package")
 endif()
+
 message(STATUS "OnCrypto: using OpenSSL target ${ONCRYPTO_OPENSSL_LIB}")
 
 # ============================================================
-# Windows system libraries for MinGW
+# System libraries per platform
 # ============================================================
-if(ONCRYPTO_IS_WINDOWS AND MINGW)
-    set(WINDOWS_SYSTEM_LIBS
-        ws2_32     # Winsock2 - for OpenSSL sockets
-        crypt32    # Crypto API - for OpenSSL certificate store
-        gdi32      # GDI - for OpenSSL
-        bcrypt     # BCrypt - for OpenSSL 3.x
-    )
+
+if(ONCRYPTO_IS_ANDROID)
+    # Android: Additional system libraries
+    set(SYSTEM_LIBS dl)  # For dynamic loading
+    message(STATUS "Android system libraries: ${SYSTEM_LIBS}")
+    
+elseif(ONCRYPTO_IS_WINDOWS AND MINGW)
+    # Windows MinGW: Winsock and crypto APIs
+    set(SYSTEM_LIBS ws2_32 crypt32 gdi32 bcrypt)
+    message(STATUS "Windows MinGW system libraries: ${SYSTEM_LIBS}")
+    
+elseif(ONCRYPTO_IS_WINDOWS AND MSVC)
+    # Windows MSVC: Same as MinGW
+    set(SYSTEM_LIBS ws2_32 crypt32 gdi32 bcrypt)
+    message(STATUS "Windows MSVC system libraries: ${SYSTEM_LIBS}")
+    
 else()
-    set(WINDOWS_SYSTEM_LIBS "")
+    # Linux and others
+    set(SYSTEM_LIBS "")
+    message(STATUS "No additional system libraries needed")
 endif()
 
 # ============================================================
@@ -168,7 +262,7 @@ target_include_directories(oncrypto_engine_objs
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Compile definitions - CRITICAL: Add ONCRYPTO_BUILD_SHARED for proper dllexport
+# Compile definitions
 target_compile_definitions(oncrypto_core_objs PRIVATE 
     ONCRYPTO_BUILD_SHARED=1
     ONCRYPTO_BUILD 
@@ -176,11 +270,15 @@ target_compile_definitions(oncrypto_core_objs PRIVATE
 )
 
 target_compile_definitions(oncrypto_engine_objs PRIVATE 
-    OPENSSL_NO_DLL          # Static OpenSSL
     ONCRYPTO_BUILD_SHARED=1
     ONCRYPTO_BUILD 
     ONCRYPTO_ENGINE_BUILD
 )
+
+# For Android and Linux, add OpenSSL definitions
+if(ONCRYPTO_IS_ANDROID OR ONCRYPTO_IS_LINUX)
+    target_compile_definitions(oncrypto_engine_objs PRIVATE OPENSSL_NO_DLL)
+endif()
 
 # Make OpenSSL headers available to the engine object library
 target_link_libraries(oncrypto_engine_objs PRIVATE ${ONCRYPTO_OPENSSL_LIB})
@@ -192,7 +290,7 @@ set_target_properties(oncrypto_engine_objs PROPERTIES POSITION_INDEPENDENT_CODE 
 # ============================================================
 # Compile options
 # ============================================================
-if(ENABLE_VISIBILITY AND NOT ONCRYPTO_IS_WINDOWS)
+if(ENABLE_VISIBILITY AND NOT ONCRYPTO_IS_WINDOWS AND NOT ONCRYPTO_IS_ANDROID)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         set(VISIBILITY_FLAGS -fvisibility=hidden -fvisibility-inlines-hidden)
     endif()
@@ -205,7 +303,7 @@ foreach(TARGET IN ITEMS oncrypto_core_objs oncrypto_engine_objs)
     target_compile_options(${TARGET} PRIVATE
         $<$<CONFIG:Debug>:${DEBUG_FLAGS}>
         $<$<CONFIG:Release>:${RELEASE_FLAGS}>
-        $<$<AND:$<BOOL:${ENABLE_VISIBILITY}>,$<NOT:$<BOOL:${ONCRYPTO_IS_WINDOWS}>>,$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>>:${VISIBILITY_FLAGS}>
+        $<$<AND:$<BOOL:${ENABLE_VISIBILITY}>,$<NOT:$<BOOL:${ONCRYPTO_IS_WINDOWS}>>,$<NOT:$<BOOL:${ONCRYPTO_IS_ANDROID}>>,$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>>:${VISIBILITY_FLAGS}>
     )
 endforeach()
 
@@ -225,7 +323,7 @@ add_library(oncrypto_engine STATIC $<TARGET_OBJECTS:oncrypto_engine_objs>)
 target_link_libraries(oncrypto_engine 
     PUBLIC 
         ${ONCRYPTO_OPENSSL_LIB}
-        ${WINDOWS_SYSTEM_LIBS}
+        ${SYSTEM_LIBS}
 )
 set_target_properties(oncrypto_engine PROPERTIES 
     OUTPUT_NAME oncrypto_engine 
@@ -240,48 +338,79 @@ add_library(oncrypto SHARED
     $<TARGET_OBJECTS:oncrypto_engine_objs>
 )
 
-# Link OpenSSL and Windows system libraries
+# Link OpenSSL and system libraries
 target_link_libraries(oncrypto PRIVATE 
     ${ONCRYPTO_OPENSSL_LIB}
-    ${WINDOWS_SYSTEM_LIBS}
+    ${SYSTEM_LIBS}
 )
 
-# Export all symbols for MinGW
-if(MINGW)
-    target_link_options(oncrypto PRIVATE
-        -Wl,--export-all-symbols
-        -Wl,--enable-auto-import
+# Platform-specific shared library settings
+if(ONCRYPTO_IS_ANDROID)
+    # ==========================================================
+    # Android: Keep 'lib' prefix, use standard SONAME
+    # ==========================================================
+    set_target_properties(oncrypto PROPERTIES
+        PREFIX "lib"
+        VERSION ${PROJECT_VERSION}
+        SOVERSION 1
+        OUTPUT_NAME oncrypto
+        CLEAN_DIRECT_OUTPUT 1
     )
-endif()
-
-# ============================================================
-# CRITICAL: Static runtime for DLL ONLY (MinGW)
-# This embeds libgcc and libstdc++ into oncrypto.dll
-# ============================================================
-if(MINGW)
+    
+    # Android: No static runtime linking (uses system libc++)
+    message(STATUS "Android shared library: liboncrypto.so")
+    
+elseif(ONCRYPTO_IS_WINDOWS AND MINGW)
+    # ==========================================================
+    # Windows MinGW: Remove 'lib' prefix, embed runtime
+    # ==========================================================
+    set_target_properties(oncrypto PROPERTIES
+        PREFIX ""  # Makes oncrypto.dll instead of liboncrypto.dll
+        VERSION ${PROJECT_VERSION}
+        SOVERSION 1
+        OUTPUT_NAME oncrypto
+        CLEAN_DIRECT_OUTPUT 1
+    )
+    
     target_link_options(oncrypto PRIVATE
         -static-libgcc
         -static-libstdc++
     )
+    message(STATUS "MinGW shared library: oncrypto.dll")
+    
+elseif(ONCRYPTO_IS_WINDOWS AND MSVC)
+    # ==========================================================
+    # Windows MSVC: Standard settings
+    # ==========================================================
+    set_target_properties(oncrypto PROPERTIES
+        PREFIX ""
+        VERSION ${PROJECT_VERSION}
+        SOVERSION 1
+        OUTPUT_NAME oncrypto
+        CLEAN_DIRECT_OUTPUT 1
+    )
+    message(STATUS "MSVC shared library: oncrypto.dll")
+    
+else()
+    # ==========================================================
+    # Linux, macOS, etc.
+    # ==========================================================
+    set_target_properties(oncrypto PROPERTIES
+        VERSION ${PROJECT_VERSION}
+        SOVERSION 1
+        OUTPUT_NAME oncrypto
+        CLEAN_DIRECT_OUTPUT 1
+    )
+    message(STATUS "ELF shared library: liboncrypto.so")
 endif()
 
-# Define ONCRYPTO_BUILD_SHARED for the shared library target
-target_compile_definitions(oncrypto PRIVATE 
-    ONCRYPTO_BUILD_SHARED=1
-    ONCRYPTO_BUILD 
-    ONCRYPTO_C_ABI_BUILD
-)
-
-set_target_properties(oncrypto PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION 1
-    OUTPUT_NAME oncrypto
-    CLEAN_DIRECT_OUTPUT 1
-)
-
-# For MinGW, remove 'lib' prefix from DLL (makes oncrypto.dll instead of liboncrypto.dll)
-if(MINGW OR ONCRYPTO_IS_WINDOWS)
-    set_target_properties(oncrypto PROPERTIES PREFIX "")
+# Export all symbols for Android (required for JNI/C ABI)
+if(ONCRYPTO_IS_ANDROID)
+    target_link_options(oncrypto PRIVATE
+        -Wl,--export-dynamic
+        -Wl,--no-undefined
+    )
+    # Android: Use LLVM's libc++ (which is the default)
 endif()
 
 # ============================================================
@@ -294,7 +423,7 @@ if(BUILD_STATIC_SDK)
     )
     target_link_libraries(oncrypto_static PUBLIC 
         ${ONCRYPTO_OPENSSL_LIB}
-        ${WINDOWS_SYSTEM_LIBS}
+        ${SYSTEM_LIBS}
     )
     target_compile_definitions(oncrypto_static PRIVATE ONCRYPTO_STATIC=1)
     set_target_properties(oncrypto_static PROPERTIES
@@ -304,7 +433,7 @@ if(BUILD_STATIC_SDK)
 endif()
 
 # ============================================================
-# CLI application - NO static runtime (uses oncrypto.dll's runtime)
+# CLI application
 # ============================================================
 if(BUILD_CLI)
     add_executable(oncrypto_cli cli/src/main.cpp)
@@ -319,33 +448,56 @@ if(BUILD_CLI)
             SUFFIX ".exe"
         )
     endif()
+    
+    # Android CLI is not typically used, but if needed:
+    if(ONCRYPTO_IS_ANDROID)
+        message(STATUS "Building CLI for Android (this will create a native executable)")
+    endif()
 endif()
 
 # ============================================================
 # Tests
 # ============================================================
 if(BUILD_TESTS)
+    # C++ API / Core tests
     add_executable(oncrypto_test tests/test.cpp)
     target_include_directories(oncrypto_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/core/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/tests/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/include
     )
-    target_compile_definitions(oncrypto_test PRIVATE 
-        ONCRYPTO_STATIC=1
-        OPENSSL_NO_DLL
+    target_compile_definitions(oncrypto_test PRIVATE ONCRYPTO_STATIC=1)
+    target_link_libraries(oncrypto_test PRIVATE oncrypto_core oncrypto_engine)
+    
+    # C ABI tests
+    add_executable(onc_c_unit tests/test_c.cpp)
+    target_include_directories(onc_c_unit PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/core/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/include
     )
-    target_link_libraries(oncrypto_test PRIVATE 
-        oncrypto_core 
-        oncrypto_engine
-    )
-
+    target_compile_definitions(onc_c_unit PRIVATE ONCRYPTO_STATIC=1)
+    target_link_libraries(onc_c_unit PRIVATE oncrypto_core oncrypto_engine)
+    
+    # CLI tests
     add_executable(oncrypto_cli_test tests/test_cli.cpp)
     target_include_directories(oncrypto_cli_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_link_libraries(oncrypto_cli_test PRIVATE oncrypto)
+endif()
+
+# ============================================================
+# Benchmarks
+# ============================================================
+if(BUILD_BENCHMARKS)
+    add_executable(oncrypto_bench benchmarks/benchmark.cpp)
+    target_include_directories(oncrypto_bench PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/core/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(oncrypto_bench PRIVATE oncrypto_core oncrypto_engine)
 endif()
 
 # ============================================================
@@ -401,11 +553,19 @@ install(EXPORT OnCryptoTargets
 # ============================================================
 # RPATH handling
 # ============================================================
-if(ONCRYPTO_IS_WINDOWS)
+if(ONCRYPTO_IS_ANDROID)
+    # Android: No RPATH needed (uses system linker)
     set(CMAKE_SKIP_RPATH TRUE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
     set(CMAKE_INSTALL_RPATH "")
-    message(STATUS "RPATH disabled for Windows target")
+    message(STATUS "RPATH disabled for Android")
+    
+elseif(ONCRYPTO_IS_WINDOWS)
+    set(CMAKE_SKIP_RPATH TRUE)
+    set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+    set(CMAKE_INSTALL_RPATH "")
+    message(STATUS "RPATH disabled for Windows")
+    
 else()
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
@@ -417,20 +577,28 @@ endif()
 # Final status messages
 # ============================================================
 message(STATUS "")
+message(STATUS "============================================================")
 message(STATUS "OnCrypto ${PROJECT_VERSION} Configuration:")
+message(STATUS "============================================================")
 message(STATUS "  Build type:        ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Target platform:   ${CMAKE_SYSTEM_NAME}")
+if(ONCRYPTO_IS_ANDROID)
+    message(STATUS "  Android ABI:       ${ANDROID_ABI}")
+endif()
 message(STATUS "  Is Windows:        ${ONCRYPTO_IS_WINDOWS}")
+message(STATUS "  Is Linux:          ${ONCRYPTO_IS_LINUX}")
+message(STATUS "  Is Android:        ${ONCRYPTO_IS_ANDROID}")
 message(STATUS "  Compiler:          ${CMAKE_CXX_COMPILER}")
 message(STATUS "  Compiler ID:       ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  Build directory:   ${CMAKE_BINARY_DIR}")
-if(BUILD_STATIC_SDK)
-    message(STATUS "  Static SDK:        ON (${CMAKE_STATIC_LIBRARY_PREFIX}oncrypto${CMAKE_STATIC_LIBRARY_SUFFIX})")
-endif()
-if(BUILD_CLI)
-    message(STATUS "  CLI:               ON (${CMAKE_EXECUTABLE_PREFIX}oncrypto_cli${CMAKE_EXECUTABLE_SUFFIX})")
-endif()
+message(STATUS "  CLI:               ${BUILD_CLI}")
 message(STATUS "  Tests:             ${BUILD_TESTS}")
 message(STATUS "  Examples:          ${BUILD_EXAMPLES}")
+message(STATUS "  Static SDK:        ${BUILD_STATIC_SDK}")
+if(ONCRYPTO_IS_ANDROID)
+    message(STATUS "  OpenSSL:           ${OPENSSL_INCLUDE_DIR}")
+    message(STATUS "  OpenSSL lib:       ${OPENSSL_CRYPTO_LIBRARY}")
+endif()
 message(STATUS "  Shared library:    ${CMAKE_SHARED_LIBRARY_PREFIX}oncrypto${CMAKE_SHARED_LIBRARY_SUFFIX}")
+message(STATUS "============================================================")
 message(STATUS "")

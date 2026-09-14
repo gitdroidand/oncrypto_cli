@@ -3,6 +3,8 @@
 #include <openssl/rand.h>
 #include <openssl/err.h>
 #include <openssl/core_names.h>
+#include <array>
+#include <cstdint>
 #include <stdexcept>
 #include <cstring>
 
@@ -17,10 +19,6 @@ std::vector<unsigned char> onc_core_backend_impl_deriveKey(
     const std::vector<unsigned char>& salt,
     size_t keySize,
     size_t iterations
-);
-static std::vector<unsigned char> onc_core_backend_impl_xchacha20ToChacha20Nonce(
-    const std::vector<unsigned char>& xnonce,
-    const std::vector<unsigned char>& key
 );
 static const EVP_CIPHER* onc_core_backend_impl_getCipher(const std::string& algorithm);
 EncryptResult onc_core_backend_impl_encrypt(
@@ -211,58 +209,93 @@ std::vector<unsigned char> onc_core_backend_impl_deriveKey(
 }
 
 // ============================================================
-// XChaCha20: Convert 24-byte nonce to 12-byte nonce using EVP_MAC
+// XChaCha20 (IETF): derive a ChaCha20 subkey using HChaCha20 and
+// then form the standard 12-byte nonce as [0,0,0,0 || last 8 bytes].
 // ============================================================
+
+namespace {
+
+inline uint32_t onc_core_load32_le(const unsigned char* ptr) {
+    return static_cast<uint32_t>(ptr[0]) |
+           (static_cast<uint32_t>(ptr[1]) << 8) |
+           (static_cast<uint32_t>(ptr[2]) << 16) |
+           (static_cast<uint32_t>(ptr[3]) << 24);
+}
+
+inline void onc_core_store32_le(unsigned char* ptr, uint32_t value) {
+    ptr[0] = static_cast<unsigned char>(value & 0xffu);
+    ptr[1] = static_cast<unsigned char>((value >> 8) & 0xffu);
+    ptr[2] = static_cast<unsigned char>((value >> 16) & 0xffu);
+    ptr[3] = static_cast<unsigned char>((value >> 24) & 0xffu);
+}
+
+inline uint32_t onc_core_rotl32(uint32_t value, int bits) {
+    return (value << bits) | (value >> (32 - bits));
+}
+
+inline void onc_core_quarter_round(uint32_t& a, uint32_t& b, uint32_t& c, uint32_t& d) {
+    a += b; d ^= a; d = onc_core_rotl32(d, 16);
+    c += d; b ^= c; b = onc_core_rotl32(b, 12);
+    a += b; d ^= a; d = onc_core_rotl32(d, 8);
+    c += d; b ^= c; b = onc_core_rotl32(b, 7);
+}
+
+std::vector<unsigned char> onc_core_backend_impl_hchacha20(
+    const std::vector<unsigned char>& key,
+    const std::vector<unsigned char>& nonce
+) {
+    if (key.size() != 32) {
+        throw std::runtime_error("Backend: XChaCha20 requires 32-byte key");
+    }
+    if (nonce.size() != 16) {
+        throw std::runtime_error("Backend: HChaCha20 requires 16-byte nonce");
+    }
+
+    std::array<uint32_t, 16> state = {
+        0x61707865u, 0x3320646eu, 0x79622d32u, 0x6b206574u,
+        onc_core_load32_le(key.data() + 0),  onc_core_load32_le(key.data() + 4),
+        onc_core_load32_le(key.data() + 8),  onc_core_load32_le(key.data() + 12),
+        onc_core_load32_le(key.data() + 16), onc_core_load32_le(key.data() + 20),
+        onc_core_load32_le(key.data() + 24), onc_core_load32_le(key.data() + 28),
+        onc_core_load32_le(nonce.data() + 0), onc_core_load32_le(nonce.data() + 4),
+        onc_core_load32_le(nonce.data() + 8), onc_core_load32_le(nonce.data() + 12)
+    };
+
+    for (int i = 0; i < 10; ++i) {
+        onc_core_quarter_round(state[0], state[4], state[8], state[12]);
+        onc_core_quarter_round(state[1], state[5], state[9], state[13]);
+        onc_core_quarter_round(state[2], state[6], state[10], state[14]);
+        onc_core_quarter_round(state[3], state[7], state[11], state[15]);
+        onc_core_quarter_round(state[0], state[5], state[10], state[15]);
+        onc_core_quarter_round(state[1], state[6], state[11], state[12]);
+        onc_core_quarter_round(state[2], state[7], state[8], state[13]);
+        onc_core_quarter_round(state[3], state[4], state[9], state[14]);
+    }
+
+    std::vector<unsigned char> subkey(32);
+    for (size_t i = 0; i < 4; ++i) {
+        onc_core_store32_le(subkey.data() + (i * 4), state[i]);
+        onc_core_store32_le(subkey.data() + 16 + (i * 4), state[12 + i]);
+    }
+    return subkey;
+}
 
 static std::vector<unsigned char> onc_core_backend_impl_xchacha20ToChacha20Nonce(
     const std::vector<unsigned char>& xnonce,
     const std::vector<unsigned char>& key
 ) {
+    (void)key;
+    if (xnonce.size() != 24) {
+        throw std::runtime_error("Backend: XChaCha20 requires 24-byte nonce");
+    }
+
     std::vector<unsigned char> derivedNonce(12);
-    
-    EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
-    if (!mac) {
-        throw std::runtime_error("Backend: Failed to fetch HMAC");
-    }
-    
-    EVP_MAC_CTX* ctx = EVP_MAC_CTX_new(mac);
-    if (!ctx) {
-        EVP_MAC_free(mac);
-        throw std::runtime_error("Backend: Failed to create MAC context");
-    }
-    
-    OSSL_PARAM params[] = {
-        OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
-                                         (char*)"SHA256", 0),
-        OSSL_PARAM_construct_end()
-    };
-    
-    if (EVP_MAC_init(ctx, key.data(), key.size(), params) != 1) {
-        EVP_MAC_CTX_free(ctx);
-        EVP_MAC_free(mac);
-        throw std::runtime_error("Backend: Failed to init HMAC");
-    }
-    
-    if (EVP_MAC_update(ctx, xnonce.data(), xnonce.size()) != 1) {
-        EVP_MAC_CTX_free(ctx);
-        EVP_MAC_free(mac);
-        throw std::runtime_error("Backend: Failed to update HMAC");
-    }
-    
-    size_t outLen = 32;
-    std::vector<unsigned char> hmac(32);
-    if (EVP_MAC_final(ctx, hmac.data(), &outLen, hmac.size()) != 1) {
-        EVP_MAC_CTX_free(ctx);
-        EVP_MAC_free(mac);
-        throw std::runtime_error("Backend: Failed to finalize HMAC");
-    }
-    
-    EVP_MAC_CTX_free(ctx);
-    EVP_MAC_free(mac);
-    
-    std::memcpy(derivedNonce.data(), hmac.data(), 12);
+    std::memset(derivedNonce.data(), 0, 4);
+    std::memcpy(derivedNonce.data() + 4, xnonce.data() + 16, 8);
     return derivedNonce;
 }
+
+} // namespace
 
 // ============================================================
 // Get Cipher
@@ -296,19 +329,17 @@ EncryptResult onc_core_backend_impl_encrypt(
         throw std::runtime_error("Backend: Invalid key size");
     }
     
+    std::vector<unsigned char> actualKey = key;
     std::vector<unsigned char> actualNonce = nonce;
     if (algorithm == "XChaCha20-Poly1305") {
         if (nonce.size() != 24) {
             throw std::runtime_error("Backend: XChaCha20 requires 24-byte nonce");
         }
+        actualKey = onc_core_backend_impl_hchacha20(key, std::vector<unsigned char>(nonce.begin(), nonce.begin() + 16));
         actualNonce = onc_core_backend_impl_xchacha20ToChacha20Nonce(nonce, key);
     } else {
-        if (nonce.size() != 12 && nonce.size() != 24) {
+        if (nonce.size() != 12) {
             throw std::runtime_error("Backend: Invalid nonce size");
-        }
-        if (nonce.size() == 24) {
-            actualNonce.resize(12);
-            std::memcpy(actualNonce.data(), nonce.data(), 12);
         }
     }
     
@@ -322,9 +353,18 @@ EncryptResult onc_core_backend_impl_encrypt(
     
     int outlen = 0, tmplen = 0;
     
-    if (EVP_EncryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1 ||
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, actualNonce.size(), nullptr) != 1 ||
-        EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), actualNonce.data()) != 1) {
+    if (EVP_EncryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("Backend: Encryption init failed");
+    }
+
+    if (algorithm == "AES-256-GCM" &&
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, actualNonce.size(), nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("Backend: Encryption init failed");
+    }
+
+    if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, actualKey.data(), actualNonce.data()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Backend: Encryption init failed");
     }
@@ -370,19 +410,17 @@ std::vector<unsigned char> onc_core_backend_impl_decrypt(
         throw std::runtime_error("Backend: Invalid key size");
     }
     
+    std::vector<unsigned char> actualKey = key;
     std::vector<unsigned char> actualNonce = nonce;
     if (algorithm == "XChaCha20-Poly1305") {
         if (nonce.size() != 24) {
             throw std::runtime_error("Backend: XChaCha20 requires 24-byte nonce");
         }
+        actualKey = onc_core_backend_impl_hchacha20(key, std::vector<unsigned char>(nonce.begin(), nonce.begin() + 16));
         actualNonce = onc_core_backend_impl_xchacha20ToChacha20Nonce(nonce, key);
     } else {
-        if (nonce.size() != 12 && nonce.size() != 24) {
+        if (nonce.size() != 12) {
             throw std::runtime_error("Backend: Invalid nonce size");
-        }
-        if (nonce.size() == 24) {
-            actualNonce.resize(12);
-            std::memcpy(actualNonce.data(), nonce.data(), 12);
         }
     }
     
@@ -395,9 +433,18 @@ std::vector<unsigned char> onc_core_backend_impl_decrypt(
     
     int outlen = 0, tmplen = 0;
     
-    if (EVP_DecryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1 ||
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, actualNonce.size(), nullptr) != 1 ||
-        EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), actualNonce.data()) != 1) {
+    if (EVP_DecryptInit_ex(ctx, cipher, nullptr, nullptr, nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("Backend: Decryption init failed");
+    }
+
+    if (algorithm == "AES-256-GCM" &&
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, actualNonce.size(), nullptr) != 1) {
+        EVP_CIPHER_CTX_free(ctx);
+        throw std::runtime_error("Backend: Decryption init failed");
+    }
+
+    if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, actualKey.data(), actualNonce.data()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Backend: Decryption init failed");
     }

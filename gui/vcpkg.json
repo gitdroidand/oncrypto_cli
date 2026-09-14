@@ -1,0 +1,8 @@
+{
+  "name": "oncrypto-gui",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "qtbase",
+    "qtsvg"
+  ]
+}

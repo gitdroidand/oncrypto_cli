@@ -29,3 +29,12 @@ Abi: 200007a2f302a1e7dcc162b2d5b428a872c0d94a08110087996b68b700b998a4
 Description: OpenSSL is an open source project that provides a robust, commercial-grade, and full-featured toolkit for the Transport Layer Security (TLS) and Secure Sockets Layer (SSL) protocols. It is also a general-purpose cryptography library.
 Status: install ok installed
 
+Package: openssl
+Version: 3.6.3
+Depends: vcpkg-cmake, vcpkg-cmake-config, vcpkg-cmake-get-vars
+Architecture: x64-linux
+Multi-Arch: same
+Abi: 703a9f6e42daf42d9ce446ec3f19bae08d88dc2517254529d9df60a508cd0ae5
+Description: OpenSSL is an open source project that provides a robust, commercial-grade, and full-featured toolkit for the Transport Layer Security (TLS) and Secure Sockets Layer (SSL) protocols. It is also a general-purpose cryptography library.
+Status: purge ok not-installed
+

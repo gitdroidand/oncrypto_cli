@@ -1,0 +1,182 @@
+{
+    "version": 6,
+
+    "configurePresets": [
+        {
+            "name": "windows-msvc",
+            "displayName": "Windows Native / MSVC",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/windows-msvc",
+
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF"
+            }
+        },
+
+        {
+            "name": "windows-mingw",
+            "displayName": "Windows / MinGW",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/windows-mingw",
+
+            "cacheVariables": {
+                "CMAKE_SYSTEM_NAME": "Windows",
+
+                "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+                "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+
+                "CMAKE_EXE_LINKER_FLAGS": "-static-libgcc -static-libstdc++",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+
+                "VCPKG_MANIFEST_INSTALL": "OFF",
+                
+                "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+            }
+        },
+
+        {
+            "name": "linux-gcc",
+            "displayName": "Linux / GCC",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-gcc",
+
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-linux"
+            }
+        },
+
+        {
+            "name": "linux-clang",
+            "displayName": "Linux / Clang",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-clang",
+
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-linux"
+            }
+        },
+
+        {
+            "name": "linux-mingw",
+            "displayName": "Linux / MinGW",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/linux-mingw",
+
+            "cacheVariables": {
+                "CMAKE_SYSTEM_NAME": "Windows",
+
+                "CMAKE_C_COMPILER": "x86_64-w64-mingw32-gcc",
+                "CMAKE_CXX_COMPILER": "x86_64-w64-mingw32-g++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+
+                "CMAKE_EXE_LINKER_FLAGS": "-static-libgcc -static-libstdc++",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-static"
+            }
+        },
+
+        {
+            "name": "macos-clang",
+            "displayName": "macOS / Apple Clang",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/macos-clang",
+
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF"
+            }
+        },
+
+        {
+            "name": "macos-gcc",
+            "displayName": "macOS / GCC",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/macos-gcc",
+
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++",
+
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        {
+            "name": "windows-msvc",
+            "configurePreset": "windows-msvc",
+            "jobs": 2
+        },
+
+        {
+            "name": "windows-mingw",
+            "configurePreset": "windows-mingw",
+            "jobs": 2
+        },
+
+        {
+            "name": "linux-gcc",
+            "configurePreset": "linux-gcc",
+            "jobs": 2
+        },
+
+        {
+            "name": "linux-clang",
+            "configurePreset": "linux-clang",
+            "jobs": 2
+        },
+
+        {
+            "name": "linux-mingw",
+            "configurePreset": "linux-mingw",
+            "jobs": 2
+        },
+
+        {
+            "name": "macos-clang",
+            "configurePreset": "macos-clang",
+            "jobs": 2
+        },
+
+        {
+            "name": "macos-gcc",
+            "configurePreset": "macos-gcc",
+            "jobs": 2
+        }
+    ]
+}

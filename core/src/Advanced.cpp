@@ -1,3 +1,4 @@
+
 #include "oncrypto/oncrypto.hpp"
 #include "CryptoRepository.hpp"
 #include "utils/FileUtils.hpp"
@@ -13,11 +14,9 @@ std::vector<unsigned char> encrypt(
     const std::string& password,
     const EncryptionOptions& options
 ) {
-    // For now, use simple API with password
-    // Future: use all options (algorithm, kdf, iterations, etc.)
-    (void)options; // Suppress unused warning for now
-    
-    return crypto::encrypt(data, password);
+    (void)options;
+    CryptoRepository repo;
+    return repo.encrypt(ByteView(data), password).data;
 }
 
 std::vector<unsigned char> decrypt(
@@ -25,9 +24,9 @@ std::vector<unsigned char> decrypt(
     const std::string& password,
     const DecryptionOptions& options
 ) {
-    (void)options; // Suppress unused warning for now
-    
-    return crypto::decrypt(data, password);
+    (void)options;
+    CryptoRepository repo;
+    return repo.decrypt(ByteView(data), password);
 }
 
 } // namespace crypto::advanced

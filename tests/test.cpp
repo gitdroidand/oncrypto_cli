@@ -4,6 +4,7 @@
 #include "utils/FileUtils.hpp"
 #include "utils/KeyDerivation.hpp"
 #include "format/OnCFormat.hpp"
+#include "oncrypto/oncrypto.hpp"
 #include "oncrypto_engine.h"
 
 using namespace crypto;
@@ -125,6 +126,37 @@ TEST_CASE("OnC Format validation") {
     
     REQUIRE(metadata.tag.size() == 16);
     REQUIRE(ciphertext.size() == data.size());
+}
+
+TEST_CASE("OnC format serialize/deserialize_view round trip") {
+    const std::vector<std::vector<unsigned char>> payloads = {
+        {},
+        {0x01, 0x02, 0x03, 0x04, 0x05},
+        std::vector<unsigned char>(19, 'A'),
+        std::vector<unsigned char>(1024, 'B'),
+        std::vector<unsigned char>(10 * 1024 * 1024, 'C')
+    };
+
+    for (const auto& payload : payloads) {
+        onc::format::OnCMetadata metadata;
+        metadata.algorithmName = "AES-256-GCM";
+        metadata.kdfName = "PBKDF2-SHA256";
+        metadata.iterations = 100000;
+        metadata.salt.resize(16, 0x11);
+        metadata.nonce.resize(12, 0x22);
+        metadata.tag.resize(16, 0x33);
+
+        std::vector<uint8_t> encoded;
+        encoded.resize(sizeof(onc::format::OnCHeader) + metadata.nonce.size() + metadata.tag.size() + payload.size());
+        onc::format::serialize_into(metadata, payload, encoded);
+
+        auto view = onc::format::deserialize_view(encoded);
+        REQUIRE(view.data.size() == payload.size());
+        REQUIRE(view.nonce.size() == metadata.nonce.size());
+        REQUIRE(view.tag.size() == metadata.tag.size());
+        REQUIRE(view.salt.size() == metadata.salt.size());
+        REQUIRE(std::equal(payload.begin(), payload.end(), view.data.begin()));
+    }
 }
 
 TEST_CASE("Wrong password rejection with OnC Format") {
@@ -266,6 +298,105 @@ TEST_CASE("Algorithm selection") {
     auto result2 = repo.encrypt(large, password);
     REQUIRE(!result2.data.empty());
     REQUIRE(onc::format::validateHeader(result2.data));
+}
+
+TEST_CASE("onc::extreme expert API preserves caller-specified salt and nonce") {
+    std::vector<unsigned char> plaintext = {'H', 'e', 'l', 'l', 'o', ' ', 'e', 'x', 'p', 'e', 'r', 't'};
+
+    onc::extreme::EncryptOptions enc{};
+    enc.algorithm = onc::extreme::Algorithm::AES256_GCM;
+    enc.iterations = 100000;
+    enc.key_length = 32;
+    enc.nonce_length = 12;
+    enc.salt.assign(16, 0x11);
+    enc.nonce.assign(12, 0x22);
+    enc.store_metadata = true;
+
+    auto encrypted = onc::extreme::encrypt(plaintext, "expert-pass", enc);
+    REQUIRE(!encrypted.empty());
+    REQUIRE(onc::format::validateHeader(encrypted));
+
+    auto view = onc::format::deserialize_view(encrypted);
+    REQUIRE(view.salt.size() == 16);
+    REQUIRE(view.nonce.size() == 12);
+    REQUIRE(view.iterations == 100000);
+
+    onc::extreme::DecryptOptions dec{};
+    dec.algorithm = onc::extreme::Algorithm::AES256_GCM;
+    dec.iterations = 100000;
+    dec.key_length = 32;
+    dec.nonce_length = 12;
+    dec.salt = enc.salt;
+    dec.nonce = enc.nonce;
+    dec.verify_integrity = true;
+
+    auto decrypted = onc::extreme::decrypt(encrypted, "expert-pass", dec);
+    REQUIRE(decrypted == plaintext);
+}
+
+TEST_CASE("onc::extreme raw payload mode works without metadata") {
+    std::vector<unsigned char> plaintext(128);
+    for (size_t i = 0; i < plaintext.size(); ++i) {
+        plaintext[i] = static_cast<unsigned char>((i * 17u) % 251u);
+    }
+
+    onc::extreme::EncryptOptions enc{};
+    enc.algorithm = onc::extreme::Algorithm::XChaCha20_Poly1305;
+    enc.iterations = 100000;
+    enc.key_length = 32;
+    enc.nonce_length = 24;
+    enc.salt.assign(16, 0x33);
+    enc.nonce.assign(24, 0x44);
+    enc.store_metadata = false;
+
+    auto encrypted = onc::extreme::encrypt(plaintext, "raw-mode", enc);
+    REQUIRE(encrypted.size() == plaintext.size() + 16);
+
+    onc::extreme::DecryptOptions dec{};
+    dec.algorithm = onc::extreme::Algorithm::XChaCha20_Poly1305;
+    dec.iterations = 100000;
+    dec.key_length = 32;
+    dec.nonce_length = 24;
+    dec.salt = enc.salt;
+    dec.nonce = enc.nonce;
+    dec.verify_integrity = true;
+
+    auto decrypted = onc::extreme::decrypt(encrypted, "raw-mode", dec);
+    REQUIRE(decrypted == plaintext);
+}
+
+TEST_CASE("onc::extreme raw key mode and invalid auth failure") {
+    std::vector<unsigned char> plaintext = {'A', 'B', 'C', 'D', 'E'};
+    std::vector<unsigned char> key(32, 0x7A);
+    std::vector<unsigned char> nonce(24, 0x5C);
+
+    onc::extreme::EncryptOptions enc{};
+    enc.algorithm = onc::extreme::Algorithm::XChaCha20_Poly1305;
+    enc.key = key;
+    enc.nonce = nonce;
+    enc.use_raw_key = true;
+    enc.store_metadata = false;
+
+    auto encrypted = onc::extreme::encrypt(plaintext, "ignored-password", enc);
+    REQUIRE(encrypted.size() == plaintext.size() + 16);
+
+    onc::extreme::DecryptOptions dec_raw{};
+    dec_raw.algorithm = onc::extreme::Algorithm::XChaCha20_Poly1305;
+    dec_raw.key = key;
+    dec_raw.nonce = nonce;
+    dec_raw.use_raw_key = true;
+    dec_raw.verify_integrity = true;
+    auto decrypted = onc::extreme::decrypt(encrypted, "ignored-password", dec_raw);
+    REQUIRE(decrypted == plaintext);
+
+    encrypted.back() ^= 0xFF;
+    bool threw = false;
+    try {
+        (void)onc::extreme::decrypt(encrypted, "ignored-password", dec_raw);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    REQUIRE(threw);
 }
 
 TEST_CASE("Large data (10MB)") {

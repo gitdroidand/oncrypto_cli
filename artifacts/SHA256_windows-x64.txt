@@ -1,0 +1,4 @@
+a8f35e5fb3912632376fe54d9bc07521aa85f128cbbb1c3e673ae2a67d5778ce  artifacts/windows-x64/oncrypto.dll
+5bb3c73bf2b2aa715673e575a27c592a1822ca65e3a6bcad2e793f3a7c0d0dc2  artifacts/windows-x64/oncrypto_cli.exe
+716df4898fdbfb0c58c6e83918f803dd9d2bf6b2e26734f73d4c96f5423f435b  artifacts/windows-x64/libstdc++-6.dll
+db6299e6e110540fc4622b6a1cbe6b83078d6ce6e05a140fa0cddbeb7afa1f04  artifacts/windows-x64/libgcc_s_seh-1.dll
