@@ -264,6 +264,7 @@ let decrypted = decrypt(&encrypted, key).unwrap();
 
 assert_eq!(decrypted, message);
 ```
++> The Rust binding is currently distributed as part of the OnCrypto source tree and may not yet be available as a published crates.io package.
 
 Also exposes `Algorithm`, `EncryptorBuilder`, `OnCryptoError`, and streaming support via `EncryptStream` / `DecryptStream`.
 
@@ -348,4 +349,4 @@ oncrypto_cli/
 
 ## License
 
-Released under the **MIT License**. See [`LICENSE`](LICENSE) for the full text.
++Released under the **MIT License**. See [`LICENSE`](LICENSE) for the full text.
