@@ -1,69 +1,178 @@
 # Building OnCrypto
 
-This document describes how to build the **OnCrypto SDK**, native libraries, CLI, tests, and language bindings.
+This document describes how to configure, build, test, install, and integrate the OnCrypto native SDK.
+
+OnCrypto uses **CMake** as its primary build system and requires a **C++20-capable toolchain**.
+
+The build system supports:
+
+* Linux
+* Windows
+* macOS
+* Android
+
+Android is an officially supported target.
 
 ---
 
-## Requirements
+## 1. Build Requirements
 
 ### Required
 
-* CMake 3.16 or newer
-* C++20-capable compiler
+| Requirement  | Version     |
+| ------------ | ----------- |
+| CMake        | 3.16+       |
+| C++ compiler | C++20       |
+| Git          | Recommended |
+| Ninja        | Recommended |
 
-  * GCC
-  * Clang
-  * MSVC
-* OpenSSL 3.x development libraries
-* Ninja (recommended)
+Supported compiler families include:
 
-On Linux, install the required development packages with your distribution's package manager.
+* GCC
+* Clang
+* MSVC
 
-For Ubuntu/Debian:
+For Android:
+
+* Android NDK
+* Android SDK/NDK toolchain
+* vcpkg with an Android target triplet
+
+---
+
+# 2. Clone the Repository
 
 ```bash
-sudo apt update
-sudo apt install cmake ninja-build g++ libssl-dev
+git clone https://github.com/gitdroidand/oncrypto_cli.git
+cd oncrypto_cli
 ```
 
 ---
 
-# Build
+# 3. CMake Configuration
 
-The recommended build configuration uses CMake with Ninja.
-
-From the repository root:
+The standard build flow is:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+
 cmake --build build
 ```
 
-For a debug build:
+For development:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug
+
 cmake --build build
+```
+
+Ninja is recommended, but CMake generators other than Ninja can also be used when supported by the selected toolchain.
+
+---
+
+# 4. CMake Build Options
+
+OnCrypto exposes the following configuration options:
+
+| Option              | Default | Description                                       |
+| ------------------- | ------: | ------------------------------------------------- |
+| `BUILD_CLI`         |   `OFF` | Build the command-line application                |
+| `BUILD_TESTS`       |   `OFF` | Build the native test suite                       |
+| `BUILD_BENCHMARKS`  |   `OFF` | Build benchmarks                                  |
+| `BUILD_EXAMPLES`    |   `OFF` | Build example programs                            |
+| `BUILD_STATIC_SDK`  |   `OFF` | Build the public static SDK                       |
+| `ENABLE_VISIBILITY` |   `OFF` | Enable symbol visibility controls where supported |
+
+Example development configuration:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_TESTS=ON \
+    -DBUILD_EXAMPLES=ON
+```
+
+Example full development configuration:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_CLI=ON \
+    -DBUILD_TESTS=ON \
+    -DBUILD_BENCHMARKS=ON \
+    -DBUILD_EXAMPLES=ON
 ```
 
 ---
 
-# Build Artifacts
+# 5. Release Build
 
-The build directory contains the native OnCrypto components.
+For a normal release build:
 
-Typical artifacts include:
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build
+```
+
+The Release configuration enables compiler optimizations and disables debug assertions where applicable.
+
+---
+
+# 6. Debug Build
+
+For development and debugging:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug
+
+cmake --build build
+```
+
+Debug builds enable debugging information and the project's development compiler diagnostics.
+
+---
+
+# 7. Native Libraries
+
+The native build is structured around separate implementation and public SDK components.
+
+Conceptually:
 
 ```text
-build/
-├── liboncrypto_core.a
-├── liboncrypto.so
-├── liboncrypto.a
-├── oncrypto_cli
-└── oncrypto_test
+                    OnCrypto
+                       │
+              ┌────────┴────────┐
+              │                 │
+          Public API        Internal Core
+              │                 │
+              └────────┬────────┘
+                       │
+                Native Engine
+                       │
+              Platform backend
 ```
 
-On Windows, the shared library is produced as:
+The main public shared library is:
+
+```text
+liboncrypto.so
+```
+
+on Unix-like platforms.
+
+On Windows:
 
 ```text
 oncrypto.dll
@@ -75,82 +184,82 @@ On macOS:
 liboncrypto.dylib
 ```
 
-## Artifact roles
+---
 
-### `liboncrypto_core.a`
+# 8. Static SDK
 
-Internal static implementation library.
+The public static SDK can be enabled with:
 
-It contains the internal OnCrypto implementation and is **not intended to be consumed directly by application developers**.
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_STATIC_SDK=ON
 
-It exists primarily as an internal SDK build component.
+cmake --build build
+```
 
-### `liboncrypto.so`
+The static SDK is intended for applications that require static linking.
 
-Public OnCrypto shared library on Linux.
-
-This is the primary dynamic SDK artifact for applications and language bindings.
-
-### `liboncrypto.a`
-
-Public OnCrypto static SDK library.
-
-Applications that require static linking can consume this artifact when the corresponding platform and dependency configuration supports it.
-
-### `oncrypto_cli`
-
-The OnCrypto command-line application.
-
-### `oncrypto_test`
-
-Native test executable for validating the OnCrypto implementation.
+The exact additional runtime and platform dependencies depend on the selected target and toolchain.
 
 ---
 
-# Installation
+# 9. Internal Build Artifacts
 
-On Linux, the SDK can be installed using CMake:
+The build system also creates internal components used to assemble the SDK.
 
-```bash
-sudo cmake --install build --prefix /usr/local
+For example:
+
+```text
+liboncrypto_core.a
 ```
 
-This installs the public SDK components according to the project's CMake installation rules.
+is an internal implementation artifact.
 
-After installation, applications can use the installed OnCrypto headers and library.
+It is **not a stable public application interface**.
+
+Application developers should use:
+
+```text
+Public OnCrypto headers
+        +
+liboncrypto
+```
+
+rather than depending directly on internal build targets.
 
 ---
 
-# Running Tests
+# 10. CLI
 
-Build the test target:
+The command-line application is optional.
 
-```bash
-cmake --build build --target oncrypto_test
-```
-
-Run the test executable:
+Enable it with:
 
 ```bash
-./build/oncrypto_test
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_CLI=ON
 ```
 
-A successful test run indicates that the native OnCrypto implementation passed its configured test suite.
+Then build:
 
----
+```bash
+cmake --build build
+```
 
-# CLI
+The CLI target is:
 
-The CLI is built together with the SDK:
+```text
+oncrypto_cli
+```
+
+It can also be built explicitly:
 
 ```bash
 cmake --build build --target oncrypto_cli
-```
-
-The resulting executable is normally:
-
-```text
-build/oncrypto_cli
 ```
 
 Run:
@@ -159,151 +268,198 @@ Run:
 ./build/oncrypto_cli --help
 ```
 
----
-
-# OpenSSL
-
-OnCrypto uses OpenSSL as its cryptographic backend.
-
-The backend implementation is an **internal implementation detail**.
-
-Application developers should not link directly against internal OnCrypto backend interfaces.
-
-The intended dependency boundary is:
-
-```text
-Application
-     │
-     ▼
-OnCrypto Public API
-     │
-     ▼
-liboncrypto
-     │
-     ▼
-Internal OnCrypto implementation
-     │
-     ▼
-OpenSSL
-```
-
-The backend is not part of the public OnCrypto API.
+On multi-configuration generators such as Visual Studio, the output location may differ from the single-configuration Ninja layout.
 
 ---
 
-# Static OpenSSL
+# 11. Tests
 
-Some OnCrypto build configurations require static OpenSSL archives.
-
-CMake can be instructed to prefer static OpenSSL libraries with:
-
-```bash
--DOpenSSL_USE_STATIC_LIBS=ON
-```
-
-Example:
+Enable the test target:
 
 ```bash
 cmake -B build \
     -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOpenSSL_USE_STATIC_LIBS=ON
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_TESTS=ON
 ```
 
-If CMake cannot locate the required OpenSSL installation, specify its root directory:
+Build:
 
 ```bash
--DOPENSSL_ROOT_DIR=/path/to/openssl
-```
-
-Example:
-
-```bash
-cmake -B build \
-    -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOpenSSL_USE_STATIC_LIBS=ON \
-    -DOPENSSL_ROOT_DIR=/opt/openssl
-```
-
-The exact OpenSSL library layout is platform-dependent.
-
----
-
-# Android and Termux
-
-On Android-based environments such as Termux, the same OnCrypto SDK architecture applies.
-
-The important difference is that OpenSSL must be available for the **target architecture**.
-
-For example:
-
-```text
-Android ARM64
-     │
-     ├── OnCrypto
-     │
-     └── ARM64 OpenSSL
-```
-
-The host OpenSSL installation cannot simply be reused when it targets a different architecture.
-
-A compatible OpenSSL installation must therefore be supplied to CMake.
-
-Typical configuration:
-
-```bash
-cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DOpenSSL_USE_STATIC_LIBS=ON \
-    -DOPENSSL_ROOT_DIR=/path/to/target/openssl
-```
-
-For Android builds, use the Android NDK toolchain file and specify the desired ABI.
-
-Example:
-
-```bash
-cmake -B build \
-    -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-    -DANDROID_ABI=arm64-v8a \
-    -DANDROID_PLATFORM=android-24 \
-    -DCMAKE_BUILD_TYPE=Release
-```
-
-The exact Android configuration depends on the NDK version and target API level.
-
----
-
-# Windows
-
-On Windows, OnCrypto can be built with a C++20-capable MSVC toolchain when the required dependencies are available.
-
-Example:
-
-```powershell
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-The shared library is produced as:
+Build the test target directly:
+
+```bash
+cmake --build build --target oncrypto_test
+```
+
+The native test executable is:
+
+```text
+oncrypto_test
+```
+
+On a standard Ninja build it can normally be run with:
+
+```bash
+./build/oncrypto_test
+```
+
+A successful test run confirms that the configured native test suite completed successfully.
+
+---
+
+# 12. Benchmarks
+
+Benchmarks are optional.
+
+Enable them with:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_BENCHMARKS=ON
+```
+
+Then:
+
+```bash
+cmake --build build
+```
+
+Benchmarks should be run using the generated benchmark target/executable for the current repository revision.
+
+For meaningful performance comparisons, use a Release build and keep CPU frequency scaling, thermal throttling, and background workloads under control.
+
+---
+
+# 13. Examples
+
+Examples are disabled by default.
+
+Enable them with:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_EXAMPLES=ON
+```
+
+Then:
+
+```bash
+cmake --build build
+```
+
+Example targets and output paths may vary as examples evolve.
+
+---
+
+# 14. Linux
+
+## Requirements
+
+A typical Linux development environment requires:
+
+* CMake 3.16+
+* GCC or Clang with C++20 support
+* Ninja
+* development packages required by the native build
+
+For Debian/Ubuntu-based systems, a typical starting point is:
+
+```bash
+sudo apt update
+sudo apt install \
+    build-essential \
+    cmake \
+    ninja-build \
+    git
+```
+
+Configure:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+```
+
+Build:
+
+```bash
+cmake --build build
+```
+
+---
+
+# 15. Windows
+
+On Windows, OnCrypto supports C++20-capable MSVC and MinGW-based toolchains.
+
+## MSVC
+
+Open a Visual Studio Developer Command Prompt and configure with CMake.
+
+For Ninja:
+
+```powershell
+cmake -B build `
+    -G Ninja `
+    -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build
+```
+
+The shared library is:
 
 ```text
 oncrypto.dll
 ```
 
-Depending on the CMake/toolchain configuration, additional import-library artifacts may also be generated.
-
 ---
 
-# macOS
+## MinGW
 
-On macOS, use a C++20-capable Clang toolchain and a compatible OpenSSL installation.
+A MinGW toolchain can be used when its C++20 support and required native dependencies are correctly configured.
 
 Example:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build
+```
+
+The generated shared library is:
+
+```text
+oncrypto.dll
+```
+
+---
+
+# 16. macOS
+
+On macOS, use a C++20-capable Clang toolchain.
+
+Install the required development tools and CMake, then configure:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+```
+
+Build:
+
+```bash
 cmake --build build
 ```
 
@@ -315,255 +471,553 @@ liboncrypto.dylib
 
 ---
 
-# Public SDK Boundary
+# 17. Android
 
-OnCrypto deliberately separates its public API from its internal implementation.
+Android is an officially supported OnCrypto target.
 
-The public boundary is:
+Android builds use the Android NDK CMake toolchain and require a target-specific dependency environment.
 
-```text
-Public Headers
-      │
-      ▼
-OnCrypto API
-      │
-      ▼
-liboncrypto
-```
+The current CMake configuration expects a vcpkg Android triplet.
 
-Internal implementation components remain behind this boundary.
-
-Application developers should therefore **not depend on**:
+Examples include:
 
 ```text
-liboncrypto_core.a
-internal engine APIs
-backend implementation symbols
-OpenSSL-specific OnCrypto internals
+arm64-android
+armv7-android
 ```
 
-unless they are explicitly working on OnCrypto itself.
+The exact triplet must match the dependency environment being used.
 
 ---
 
-# C ABI and Language Bindings
+## 17.1 Android prerequisites
 
-OnCrypto provides a dedicated C ABI for foreign-function interfaces.
+Install:
+
+* Android SDK
+* Android NDK
+* CMake
+* Ninja
+* vcpkg
+
+Set the Android NDK path:
+
+```bash
+export ANDROID_NDK=/path/to/android-ndk
+```
+
+The exact environment variable names can differ depending on the surrounding build environment; the important value is the NDK directory used by the CMake toolchain.
+
+---
+
+## 17.2 Android toolchain
+
+Use the NDK CMake toolchain:
+
+```text
+$ANDROID_NDK/build/cmake/android.toolchain.cmake
+```
+
+A typical ARM64 configuration is:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+    -DANDROID_ABI=arm64-v8a \
+    -DANDROID_PLATFORM=android-24 \
+    -DVCPKG_TARGET_TRIPLET=arm64-android \
+    -DCMAKE_BUILD_TYPE=Release
+```
+
+Then:
+
+```bash
+cmake --build build
+```
+
+The exact Android platform level and vcpkg triplet should match the Android toolchain and dependency configuration used by the project.
+
+---
+
+## 17.3 Android output
+
+The shared native library uses the standard Android library name:
+
+```text
+liboncrypto.so
+```
+
+For Android, this library can be packaged into an application's native library directory for the corresponding ABI.
+
+Example:
+
+```text
+app/
+└── src/
+    └── main/
+        └── jniLibs/
+            └── arm64-v8a/
+                └── liboncrypto.so
+```
+
+The exact packaging layout depends on the consuming Android project.
+
+---
+
+# 18. Android ABI Builds
+
+Android native libraries are ABI-specific.
+
+For example:
+
+```text
+arm64-v8a
+armeabi-v7a
+x86
+x86_64
+```
+
+A library compiled for one ABI cannot simply be used as another ABI.
+
+When producing Android artifacts, build each required ABI separately or use the project's supported multi-ABI build workflow.
+
+The dependency libraries must target the same ABI as OnCrypto.
+
+---
+
+# 19. Cross Compilation
+
+OnCrypto can be cross-compiled by supplying an appropriate CMake toolchain.
+
+The general model is:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=/path/to/toolchain.cmake \
+    -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build
+```
+
+For Android, use the NDK-provided toolchain.
+
+For other platforms, use the platform's appropriate cross-compilation toolchain.
+
+---
+
+# 20. Dependency Boundary
+
+OnCrypto deliberately separates its public API from its implementation.
+
+Applications should depend on:
+
+```text
+Public OnCrypto Headers
+          │
+          ▼
+     OnCrypto SDK
+```
+
+and should not depend on internal implementation headers or internal engine symbols.
+
+The public boundary is centered around:
+
+```text
+core/include/
+include/
+```
+
+and the exported SDK library.
+
+Internal implementation details may change without constituting a public API change.
+
+---
+
+# 21. C ABI and Language Bindings
+
+OnCrypto provides a C-compatible ABI for integrations that should not depend directly on the C++ ABI.
 
 The architecture is:
 
 ```text
-                  OnCrypto
-                     │
-              Public C++ API
-                     │
-              C ABI Boundary
-                     │
-        ┌────────────┼────────────┐
-        │            │            │
-       C           Python         Go
-                    pyonc        oncgo
+Application / Binding
         │
-        ├──────── Rust
-        ├──────── Zig
-        ├──────── Kotlin
-        └──────── Swift
+        ▼
+      C ABI
+        │
+        ▼
+    OnCrypto SDK
+        │
+        ▼
+ Native implementation
 ```
 
-The C ABI exists specifically so language bindings do not need to understand the internal C++ implementation.
+This makes the C ABI suitable for:
 
-For example, the Python binding uses:
+* C
+* Python
+* Rust
+* other FFI-based integrations
 
-```text
-ctypes
-   │
-   ▼
-OnCrypto C ABI
-   │
-   ▼
-liboncrypto
-```
-
-See:
-
-```text
-docs/pyonc.md
-```
-
-for the Python binding documentation.
+Language-specific build instructions should be documented in their respective binding documentation rather than duplicated here.
 
 ---
 
-# Clean Build
+# 22. Installation
 
-If the build directory contains stale CMake configuration or artifacts, perform a clean build:
+On platforms where the project installation rules are enabled, the SDK can be installed through CMake:
+
+```bash
+cmake --install build --prefix /usr/local
+```
+
+For a user-local installation:
+
+```bash
+cmake --install build --prefix "$HOME/.local"
+```
+
+The exact installed file set is controlled by the repository's CMake installation rules.
+
+---
+
+# 23. Clean Build
+
+When changing toolchains, target platforms, dependency configurations, or CMake options, a clean build is recommended.
+
+Linux/macOS:
 
 ```bash
 rm -rf build
 ```
 
-Then configure again:
-
-```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-```
-
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 Remove-Item -Recurse -Force build
 ```
 
-Then:
+Then configure again.
 
-```powershell
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
 ```
 
 ---
 
-# Recommended Development Workflow
+# 24. Recommended Development Workflow
 
-For normal development:
+A typical development cycle is:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+# Configure
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_TESTS=ON \
+    -DBUILD_EXAMPLES=ON
+
+# Build
 cmake --build build
-```
 
-Run the native tests:
-
-```bash
+# Run tests
 ./build/oncrypto_test
-```
 
-Run the CLI:
-
-```bash
+# Inspect CLI
 ./build/oncrypto_cli --help
 ```
 
-For a release build:
+For release validation:
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+rm -rf build
+
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=ON
+
 cmake --build build
 ```
 
 ---
 
-# Build Architecture
+# 25. Troubleshooting
 
-The intended build architecture is:
+## CMake version is too old
 
-```text
-                    CMake
-                      │
-        ┌─────────────┴─────────────┐
-        │                           │
-        ▼                           ▼
- liboncrypto_core.a             Tests / CLI
-        │
-        ▼
-   OnCrypto SDK
-        │
-   ┌────┴─────┐
-   ▼          ▼
- Shared      Static
-   │          │
-   ▼          ▼
-liboncrypto.so  liboncrypto.a
-   │
-   ▼
- C ABI
-   │
-   ├── pyonc
-   ├── oncgo
-   ├── oncrypto_rs
-   ├── onc_zig
-   ├── onckt
-   └── future bindings
-```
-
-This separation keeps the cryptographic implementation independent from the language-specific integration layers.
-
----
-
-# Troubleshooting
-
-## OpenSSL not found
-
-If CMake cannot find OpenSSL:
+Check:
 
 ```bash
--DOPENSSL_ROOT_DIR=/path/to/openssl
+cmake --version
 ```
 
-can be supplied during configuration.
-
-Also verify that the OpenSSL installation contains development headers and libraries.
+OnCrypto requires CMake 3.16 or newer.
 
 ---
 
-## Wrong architecture
+## C++20 is unavailable
 
-When cross-compiling, verify that OpenSSL matches the target architecture.
+Check the compiler:
 
-For example, an ARM64 build cannot link against an x86_64 OpenSSL library.
+```bash
+g++ --version
+```
+
+or:
+
+```bash
+clang++ --version
+```
+
+On Windows:
+
+```powershell
+cl
+```
+
+Use a compiler with complete enough C++20 support for the current OnCrypto source tree.
+
+---
+
+## Wrong Android ABI
+
+Verify:
+
+```text
+ANDROID_ABI
+VCPKG_TARGET_TRIPLET
+```
+
+represent the same target architecture.
+
+For example:
+
+```text
+ANDROID_ABI=arm64-v8a
+VCPKG_TARGET_TRIPLET=arm64-android
+```
+
+Do not mix dependencies built for another architecture.
+
+---
+
+## Android dependency not found
+
+Verify that the requested vcpkg triplet is installed and that the build is configured with:
+
+```bash
+-DVCPKG_TARGET_TRIPLET=<target-triplet>
+```
+
+The Android build configuration expects a target-specific dependency installation.
+
+---
+
+## Stale CMake configuration
+
+If changing:
+
+* compiler
+* generator
+* Android ABI
+* NDK
+* vcpkg triplet
+* platform
+* major build options
+
+remove the build directory and configure again.
+
+```bash
+rm -rf build
+```
 
 ---
 
 ## Shared library cannot be loaded
 
-If an application cannot locate:
+If an application cannot locate the generated shared library, verify that the runtime library search path includes the directory containing the library.
 
-```text
-liboncrypto.so
-```
-
-either install the SDK into a system library location or configure the runtime library search path appropriately.
-
-For development/testing:
+On Linux during development:
 
 ```bash
 export LD_LIBRARY_PATH=/path/to/oncrypto/lib:$LD_LIBRARY_PATH
 ```
 
-For Python, the native binding also supports:
-
-```bash
-export ONCRYPTO_LIB_PATH=/path/to/liboncrypto.so
-```
+For Android, place the `.so` in the appropriate ABI-specific native library directory of the consuming application.
 
 ---
 
-# Summary
+# 26. Build Matrix
 
-The recommended build is:
+| Platform | Toolchain    | Build System | Status    |
+| -------- | ------------ | ------------ | --------- |
+| Linux    | GCC / Clang  | CMake        | Supported |
+| Windows  | MSVC / MinGW | CMake        | Supported |
+| macOS    | Clang        | CMake        | Supported |
+| Android  | Android NDK  | CMake        | Supported |
+
+---
+
+# 27. Public vs Internal Artifacts
+
+### Public
+
+```text
+Public headers
+liboncrypto.so
+liboncrypto.dylib
+oncrypto.dll
+Public static SDK (when enabled)
+C ABI
+```
+
+### Internal
+
+```text
+liboncrypto_core.a
+Internal engine targets
+Internal implementation headers
+Internal backend symbols
+```
+
+Internal artifacts are implementation details and should not be treated as stable application interfaces.
+
+---
+
+# 28. Build System Philosophy
+
+The OnCrypto build system separates:
+
+```text
+Public API
+    │
+    ▼
+SDK Library
+    │
+    ▼
+Internal Implementation
+    │
+    ▼
+Platform-specific cryptographic engine
+```
+
+This allows the public C++ API and C ABI to remain independent from internal implementation details.
+
+Applications should therefore target the public API rather than internal build components.
+
+---
+
+# 29. Quick Reference
+
+### Standard release build
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-The resulting SDK exposes the public OnCrypto interface while keeping the implementation and backend layers internal.
+### Debug + tests
 
-The primary public artifacts are:
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_TESTS=ON
 
-```text
-liboncrypto.so
-liboncrypto.a
-public headers
+cmake --build build
 ```
 
-while:
+### Full development build
 
-```text
-liboncrypto_core.a
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_CLI=ON \
+    -DBUILD_TESTS=ON \
+    -DBUILD_BENCHMARKS=ON \
+    -DBUILD_EXAMPLES=ON
+
+cmake --build build
 ```
 
-remains an internal implementation artifact.
+### Static SDK
 
-The same public SDK and C ABI provide the foundation for OnCrypto's native applications and multi-language bindings.
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_STATIC_SDK=ON
+
+cmake --build build
+```
+
+### Android ARM64
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+    -DANDROID_ABI=arm64-v8a \
+    -DANDROID_PLATFORM=android-24 \
+    -DVCPKG_TARGET_TRIPLET=arm64-android \
+    -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build
+```
+
+### Clean build
+
+```bash
+rm -rf build
+```
+
+---
+
+# 30. Summary
+
+The canonical OnCrypto build flow is:
+
+```text
+Configure
+   │
+   ▼
+CMake
+   │
+   ▼
+Build
+   │
+   ├── Shared SDK
+   ├── Optional Static SDK
+   ├── Optional CLI
+   ├── Optional Tests
+   ├── Optional Benchmarks
+   └── Optional Examples
+```
+
+For most native development:
+
+```bash
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+For development:
+
+```bash
+cmake -B build \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_TESTS=ON
+
+cmake --build build
+```
+
+Android follows the same CMake-based architecture while using the Android NDK toolchain and an ABI-specific dependency environment.
+
+The public SDK and C ABI are the supported integration boundaries. Internal implementation libraries and symbols should not be used as application-level dependencies.
