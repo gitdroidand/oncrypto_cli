@@ -6,5 +6,6 @@
         <file>icons/decrypt.svg</file>
         <file>icons/folder.svg</file>
         <file>icons/visible.svg</file>
+        <file alias="app.svg">icons/app.svg</file>
     </qresource>
 </RCC>

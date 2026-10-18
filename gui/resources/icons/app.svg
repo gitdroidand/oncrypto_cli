@@ -1,0 +1,56 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- پس‌زمینه گرادیانت -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="lockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- پس‌زمینه گرد -->
+  <rect width="256" height="256" fill="url(#bgGradient)" rx="0"/>
+
+  <!-- بخش بیرونی: قفل -->
+  <g filter="url(#shadow)">
+    <!-- دسته قفل (arc بالایی) -->
+    <path d="M 72 120 Q 72 60 128 60 Q 184 60 184 120" 
+          fill="none" stroke="url(#lockGradient)" stroke-width="14" 
+          stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- بدنه قفل -->
+    <rect x="64" y="120" width="128" height="92" rx="12" ry="12" 
+          fill="url(#lockGradient)" opacity="0.9"/>
+    
+    <!-- بخش برجسته درون قفل -->
+    <rect x="68" y="124" width="120" height="20" rx="8" ry="8" 
+          fill="#ffffff" opacity="0.15"/>
+  </g>
+
+  <!-- بخش درونی: شیفر (هندسی) -->
+  <g transform="translate(128, 165)">
+    <!-- دایره‌های چرخنده (Cipher) -->
+    <circle cx="-35" cy="0" r="18" fill="none" stroke="#10b981" stroke-width="4" opacity="0.8"/>
+    <circle cx="0" cy="0" r="20" fill="none" stroke="#06b6d4" stroke-width="4" opacity="0.8"/>
+    <circle cx="35" cy="0" r="18" fill="none" stroke="#f59e0b" stroke-width="4" opacity="0.8"/>
+
+    <!-- خطوط درخشان -->
+    <line x1="-35" y1="-18" x2="-35" y2="-26" stroke="#10b981" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <line x1="0" y1="-20" x2="0" y2="-30" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <line x1="35" y1="-18" x2="35" y2="-26" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+
+    <!-- نقاط میانی دایره‌ها -->
+    <circle cx="-35" cy="0" r="4" fill="#10b981"/>
+    <circle cx="0" cy="0" r="4" fill="#06b6d4"/>
+    <circle cx="35" cy="0" r="4" fill="#f59e0b"/>
+  </g>
+
+  <!-- لایه نور بالا -->
+  <ellipse cx="96" cy="85" rx="30" ry="35" fill="#ffffff" opacity="0.08"/>
+</svg>

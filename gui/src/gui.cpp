@@ -14,6 +14,7 @@
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPoint>
 #include <QPropertyAnimation>
@@ -295,6 +296,95 @@ namespace
 
         void setup_connections()
         {
+            auto *menu_bar = this->menuBar();
+            if (menu_bar)
+            {
+                if (auto *action = menu_bar->findChild<QAction *>("fileNewAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { oncrypto::ui::Menu::openNewQuickAccess(this, content_); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("fileOpenAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { oncrypto::ui::Menu::openNewQuickAccess(this, content_); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("fileEncryptAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { if (content_) oncrypto::ui::Content::navigate(content_, "encrypt"); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("fileDecryptAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { if (content_) oncrypto::ui::Content::navigate(content_, "decrypt"); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("fileQuitAction"))
+                {
+                    connect(action, &QAction::triggered, this, []()
+                            { QApplication::quit(); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("viewToolbarAction"))
+                {
+                    connect(action, &QAction::toggled, this, [this](bool checked)
+                            { if (mobile_toolbar_) mobile_toolbar_->setVisible(checked); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("viewFullScreenAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            {
+                                if (isFullScreen())
+                                    showNormal();
+                                else
+                                    showFullScreen();
+                            });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("toolsEncryptAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { if (content_) oncrypto::ui::Content::navigate(content_, "encrypt"); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("toolsDecryptAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { if (content_) oncrypto::ui::Content::navigate(content_, "decrypt"); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("toolsKeyManagerAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { oncrypto::ui::Menu::openKeyManager(this); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("toolsSettingsAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { oncrypto::ui::Menu::openSettings(this); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("helpDocumentationAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            { QMessageBox::information(this, tr("Documentation"), tr("OnCrypto Desktop documentation is available in the project docs folder.")); });
+                }
+
+                if (auto *action = menu_bar->findChild<QAction *>("helpAboutAction"))
+                {
+                    connect(action, &QAction::triggered, this, [this]()
+                            {
+                                oncrypto::ui::Menu::openAbout(this);
+                            });
+                }
+            }
+
             /*
              * ----------------------------------------------------------------
              * Drawer navigation

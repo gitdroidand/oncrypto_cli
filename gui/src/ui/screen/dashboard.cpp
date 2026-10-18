@@ -1,15 +1,76 @@
+#include "gui/ui/core/recent_files.hpp"
 #include "gui/ui/screen/dashboard.hpp"
 #include "gui/ui/screen/layout_utils.hpp"
 #include "gui/ui/theme.hpp"
 
+#include <QEvent>
+#include <QFileInfo>
 #include <QFrame>
 #include <QIcon>
 #include <QLabel>
+#include <QObject>
+#include <QShowEvent>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 
+#include <functional>
+
 namespace
 {
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
+    QString format_bytes(qint64 bytes)
+    {
+        static const char *units[] = {"B", "KB", "MB", "GB", "TB"};
+        double value = static_cast<double>(bytes);
+        int unit = 0;
+        while (value >= 1024.0 && unit < 4)
+        {
+            value /= 1024.0;
+            ++unit;
+        }
+        return QStringLiteral("%1 %2")
+            .arg(value, 0, 'f', value >= 10.0 || unit == 0 ? 0 : 1)
+            .arg(QString::fromLatin1(units[unit]));
+    }
+
+    // متن را بر اساس عرض فعلی لیبل با ... کوتاه می‌کند
+    class ElideFilter final : public QObject
+    {
+    public:
+        ElideFilter(QLabel *label, QString full)
+            : QObject(label), label_(label), full_(std::move(full))
+        {
+            label_->setWordWrap(false);
+            label_->setMinimumWidth(0);
+            label_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            label_->setToolTip(full_);
+            label_->installEventFilter(this);
+            apply();
+        }
+
+    protected:
+        bool eventFilter(QObject *o, QEvent *e) override
+        {
+            if (o == label_ && e->type() == QEvent::Resize)
+                apply();
+            return QObject::eventFilter(o, e);
+        }
+
+    private:
+        void apply()
+        {
+            const int w = label_->width();
+            label_->setText(w > 0
+                                ? label_->fontMetrics().elidedText(full_, Qt::ElideMiddle, w)
+                                : full_);
+        }
+
+        QLabel *label_;
+        QString full_;
+    };
+
     // ---------------------------------------------------------------------
     // ActionCard
     // ---------------------------------------------------------------------
@@ -85,38 +146,137 @@ namespace
             auto *l = oncrypto::ui::screen::Layout::v_box(this, 3);
             l->setContentsMargins(18, 16, 18, 16);
 
-            auto *v = oncrypto::ui::screen::Layout::heading(value, this, 24);
-            v->setObjectName(QStringLiteral("DashboardValue"));
-            l->addWidget(v);
+            value_ = oncrypto::ui::screen::Layout::heading(value, this, 24);
+            value_->setObjectName(QStringLiteral("DashboardValue"));
+            l->addWidget(value_);
             l->addWidget(oncrypto::ui::screen::Layout::body_text(title, this));
         }
+
+        void set_value(const QString &v) { value_->setText(v); }
+
+    private:
+        QLabel *value_ = nullptr;
     };
 
     // ---------------------------------------------------------------------
-    // EmptyActivity
+    // RecentActivity
     // ---------------------------------------------------------------------
-    class EmptyActivity final : public QFrame
+    class RecentActivityRow final : public QFrame
     {
     public:
-        explicit EmptyActivity(QWidget *parent)
+        explicit RecentActivityRow(const gui::core::RecentFileEntry &entry, QWidget *parent = nullptr)
+            : QFrame(parent)
+        {
+            setObjectName(QStringLiteral("DashboardActivityRow"));
+            setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            setStyleSheet(QStringLiteral(
+                "QFrame#DashboardActivityRow {"
+                "   background: rgba(255,255,255,8);"
+                "   border: 1px solid rgba(255,255,255,12);"
+                "   border-radius: 10px;"
+                "}"
+                "QLabel#DashboardActivityTitle { color: palette(window-text); }"
+                "QLabel#DashboardActivityMeta { color: palette(mid); }"
+                "QLabel#DashboardActivityTime { color: palette(midlight); }"
+            ));
+
+            auto *root = new QHBoxLayout(this);
+            root->setContentsMargins(14, 10, 14, 10);
+            root->setSpacing(12);
+
+            auto *meta = oncrypto::ui::screen::Layout::v_box(nullptr, 2);
+            meta->setContentsMargins(0, 0, 0, 0);
+
+            const QString action_text =
+                entry.operation == QStringLiteral("encrypt_file") ? tr("Encrypted file") :
+                entry.operation == QStringLiteral("decrypt_file") ? tr("Decrypted file") :
+                entry.operation == QStringLiteral("encrypt_text") ? tr("Encrypted text") :
+                                                                    tr("Decrypted text");
+
+            auto *title = oncrypto::ui::screen::Layout::heading(action_text, this, 13);
+            title->setObjectName(QStringLiteral("DashboardActivityTitle"));
+            meta->addWidget(title);
+
+            QString file_label = entry.file_path;
+            if (file_label.isEmpty())
+                file_label = entry.output_path;
+            if (file_label.isEmpty())
+                file_label = tr("No path recorded");
+
+            const QString display_name = QFileInfo(file_label).fileName();
+            const QString final_label = display_name.isEmpty() ? file_label : display_name;
+
+            auto *detail = oncrypto::ui::screen::Layout::body_text(QString(), this);
+            detail->setObjectName(QStringLiteral("DashboardActivityMeta"));
+            new ElideFilter(detail,
+                            QStringLiteral("%1 • %2").arg(final_label, format_bytes(entry.file_size)));
+            if (!entry.file_path.isEmpty())
+                setToolTip(entry.file_path); // مسیر کامل در tooltip
+            meta->addWidget(detail);
+
+            auto *when = oncrypto::ui::screen::Layout::body_text(
+                entry.timestamp.toLocalTime().toString(QStringLiteral("d MMM yyyy • hh:mm")),
+                this);
+            when->setObjectName(QStringLiteral("DashboardActivityTime"));
+            when->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            when->setWordWrap(false);
+
+            root->addLayout(meta, 1);
+            root->addWidget(when, 0, Qt::AlignRight | Qt::AlignVCenter);
+        }
+    };
+
+    class RecentActivity final : public QFrame
+    {
+        Q_OBJECT
+    public:
+        explicit RecentActivity(QWidget *parent)
             : QFrame(parent)
         {
             setObjectName(QStringLiteral("DashboardActivity"));
-            auto *l = oncrypto::ui::screen::Layout::v_box(this, 5);
-            l->setContentsMargins(20, 20, 20, 20);
-
-            l->addWidget(oncrypto::ui::screen::Layout::heading(
-                tr("No activity yet"), this, 14));
-            l->addWidget(oncrypto::ui::screen::Layout::body_text(
-                tr("Your recent encryption activity will appear here."), this));
-            l->addStretch();
+            setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+            root_ = oncrypto::ui::screen::Layout::v_box(this, 8);
+            root_->setContentsMargins(20, 16, 20, 16);
+            refresh();
         }
 
+        // ارتفاع را خود layout تعیین می‌کند (max-height قبلی ردیف‌ها را له می‌کرد)
         void set_compact(bool compact)
         {
-            setMinimumHeight(compact ? 130 : 150);
-            setMaximumHeight(compact ? 160 : 190);
+            root_->setSpacing(compact ? 6 : 8);
         }
+
+    public slots:
+        void refresh()
+        {
+            while (QLayoutItem *item = root_->takeAt(0))
+            {
+                if (QWidget *w = item->widget())
+                {
+                    w->hide(); // وگرنه تا اجرای deleteLater کنار ردیف جدید دیده می‌شود
+                    w->deleteLater();
+                }
+                delete item;
+            }
+
+            const auto entries = gui::core::RecentFiles::instance().list(5);
+            if (entries.isEmpty())
+            {
+                auto *empty = oncrypto::ui::screen::Layout::heading(
+                    tr("No activity yet"), this, 14);
+                empty->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+                root_->addWidget(empty);
+                root_->addWidget(oncrypto::ui::screen::Layout::body_text(
+                    tr("Your recent encryption activity will appear here."), this));
+                return;
+            }
+
+            for (const auto &entry : entries)
+                root_->addWidget(new RecentActivityRow(entry, this));
+        }
+
+    private:
+        QVBoxLayout *root_ = nullptr;
     };
 
     // ---------------------------------------------------------------------
@@ -160,9 +320,15 @@ namespace
                 tr("Overview"), this, 16));
 
             overview_ = oncrypto::ui::screen::Layout::h_box(nullptr, 14);
-            encrypted_ = new StatCard(tr("Encrypted files"), QStringLiteral("0"), this);
-            decrypted_ = new StatCard(tr("Decrypted files"), QStringLiteral("0"), this);
-            processed_ = new StatCard(tr("Data processed"), QStringLiteral("0 B"), this);
+            encrypted_ = new StatCard(tr("Encrypted files"),
+                                      QString::number(gui::core::RecentFiles::instance().totalEncrypted()),
+                                      this);
+            decrypted_ = new StatCard(tr("Decrypted files"),
+                                      QString::number(gui::core::RecentFiles::instance().totalDecrypted()),
+                                      this);
+            processed_ = new StatCard(tr("Data processed"),
+                                      format_bytes(gui::core::RecentFiles::instance().totalBytesProcessed()),
+                                      this);
             overview_->addWidget(encrypted_, 1);
             overview_->addWidget(decrypted_, 1);
             overview_->addWidget(processed_, 1);
@@ -170,7 +336,7 @@ namespace
 
             root_->addWidget(oncrypto::ui::screen::Layout::heading(
                 tr("Recent activity"), this, 16));
-            activity_ = new EmptyActivity(this);
+            activity_ = new RecentActivity(this);
             root_->addWidget(activity_);
             root_->addSpacing(8);
 
@@ -193,6 +359,17 @@ namespace
         }
 
     protected:
+        // با هر بار نمایش داشبورد، آمار و لیست تازه می‌شوند
+        void showEvent(QShowEvent *e) override
+        {
+            ResponsiveWidget::showEvent(e);
+            auto &rf = gui::core::RecentFiles::instance();
+            encrypted_->set_value(QString::number(rf.totalEncrypted()));
+            decrypted_->set_value(QString::number(rf.totalDecrypted()));
+            processed_->set_value(format_bytes(rf.totalBytesProcessed()));
+            activity_->refresh();
+        }
+
         void apply_compact() override
         {
             root_->setContentsMargins(20, 24, 20, 28);
@@ -291,7 +468,7 @@ namespace
         StatCard *decrypted_ = nullptr;
         StatCard *processed_ = nullptr;
 
-        EmptyActivity *activity_ = nullptr;
+        RecentActivity *activity_ = nullptr;
 
         std::function<void(const char *)> navigate_callback_;
     };
@@ -319,3 +496,5 @@ namespace oncrypto::ui::screen
     }
 
 } // namespace oncrypto::ui::screen
+
+#include "dashboard.moc"

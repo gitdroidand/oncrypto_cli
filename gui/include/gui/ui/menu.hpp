@@ -16,6 +16,11 @@ namespace oncrypto::ui
         static QMenu *createCompact(QMainWindow &window);
         static void connectNavigation(QMenu *menu, QWidget *content);
 
+        static void openNewQuickAccess(QWidget *parent, QWidget *content);
+        static void openKeyManager(QWidget *parent);
+        static void openSettings(QWidget *parent);
+        static void openAbout(QWidget *parent);
+
     private:
         static void setupFileMenu(QMenuBar &menu_bar);
         static void setupEditMenu(QMenuBar &menu_bar);

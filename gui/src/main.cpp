@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QStyleFactory>
+#include <QIcon>
 
 #include "gui/gui.hpp"
 #include "gui/ui/theme.hpp"
@@ -21,6 +22,7 @@ int main(int argc, char* argv[])
             QStringLiteral("Fusion")
         )
     );
+    app.setWindowIcon(QIcon(":/app.svg"));
 
     /*
      * Initialize the OnCrypto theme system.

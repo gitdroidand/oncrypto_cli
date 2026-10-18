@@ -4,6 +4,7 @@
 #include "gui/ui/screen/encrypt.hpp"
 #include "gui/ui/screen/decrypt.hpp"
 
+#include <QMetaObject>
 #include <QSizePolicy>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -224,6 +225,11 @@ namespace
                 stack_->setCurrentWidget(
                     dashboard_);
 
+                if (auto *activity = dashboard_->findChild<QWidget *>("DashboardActivity"))
+                {
+                    QMetaObject::invokeMethod(activity, "refresh", Qt::DirectConnection);
+                }
+
                 current_route_ =
                     "dashboard";
 
@@ -252,6 +258,11 @@ namespace
 
             stack_->setCurrentWidget(
                 dashboard_);
+
+            if (auto *activity = dashboard_->findChild<QWidget *>("DashboardActivity"))
+            {
+                QMetaObject::invokeMethod(activity, "refresh", Qt::DirectConnection);
+            }
 
             current_route_ =
                 "dashboard";
